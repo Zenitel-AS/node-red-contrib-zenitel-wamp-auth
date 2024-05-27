@@ -1,13 +1,12 @@
 {
   "name": "node-red-contrib-zenitel-wamp-auth",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Nodes for accessing Zenitel Connect Pro using token",
   "main": "zenitel-wamp-auth.js",
   "dependencies": {
     "autobahn": "22.11.1"
   },
   "node-red": {
-    "version": ">=0.14.0",
     "nodes": {
       "wampConnection": "zenitel-wamp-auth.js"
     }
@@ -18,9 +17,9 @@
   },
   "keywords": [
     "node-red",
-    "wamp",
-    "token"
+    "wamp"
   ],
+  "license": "ISC",
   "author": "Erik Mortensen",
   "bugs": {
     "url": "https://github.com/Zenitel-AS/node-red-contrib-zenitel-wamp-auth/issues"
