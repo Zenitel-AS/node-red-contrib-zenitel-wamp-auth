@@ -22,7 +22,7 @@
     "node-red",
     "wamp"
   ],
-  "license": "ISC",
+  "license": "SEE LICENSE IN LICENSE",
   "author": "Erik Mortensen",
   "bugs": {
     "url": "https://github.com/Zenitel-AS/node-red-contrib-zenitel-wamp-auth/issues"
