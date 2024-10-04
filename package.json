@@ -6,6 +6,9 @@
   "dependencies": {
     "autobahn": "22.11.1"
   },
+  "engines":{
+    "node": ">=20.13.1"
+  },
   "node-red": {
     "nodes": {
       "wampConnection": "zenitel-wamp-auth.js"
