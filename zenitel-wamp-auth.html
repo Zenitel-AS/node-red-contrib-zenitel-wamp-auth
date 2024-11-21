@@ -149,6 +149,57 @@
     });
 </script>
 
+
+
+	
+<script type="text/x-red" data-template-name="wamp subs">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 110px;"><i class="fa fa-bookmark"></i> <span data-i18n="wamp.label.router"></span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-procedure" style="width: 110px;"><i class="fa fa-envelope"></i> <span data-i18n="wamp.label.procedure"></span></label>
+        <input type="text" id="node-input-procedure" data-i18n="[placeholder]wamp.placeholder.procedure">
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width: 110px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="wamp subs">
+   <p>Provides a connection to other WAMP client.</p>
+   <p>Only the <code>msg.payload</code> is sent.</p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('wamp subs',{
+        category: 'function',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            procedure: {value:"", required: true},
+            name: {value:""}
+        },
+        color:"#79d8bf",
+        inputs:1,
+        outputs:1,
+        icon: "arrow-in.png",
+        align: "right",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this.procedure || (wampNode ? wampNode.label() : this._("wamp.label.wamp"));
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    });
+</script>
+
+
+
+
+
 <script type="text/x-red" data-template-name="wamp-client">
     <div class="form-row node-input-router">
         <label for="node-config-input-address"><i class="fa fa-bookmark"></i> <span
@@ -184,10 +235,8 @@
         defaults: {             // defines the editable properties of the node
             address: {required: true},
             realm: {required: true},
-//EM
             authId: {required: true},
             password: {required: true},
-//EM
             name: {}
         },
         label: function() {     // sets the default label contents
