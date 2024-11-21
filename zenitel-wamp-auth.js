@@ -15,6 +15,8 @@ module.exports = function (RED) {
 	tls.DEFAULT_MIN_VERSION = "TLSv1.2";
 	tls.DEFAULT_MAX_VERSION = "TLSv1.3";
 
+//-------------------------------------------------------------------------------------------------------------------
+
     function WampClientNode(config) {
         RED.nodes.createNode(this, config);
         
@@ -36,6 +38,8 @@ module.exports = function (RED) {
         }
     }
     RED.nodes.registerType("wamp-client", WampClientNode);
+
+//-------------------------------------------------------------------------------------------------------------------
 
     function WampClientOutNode(config) {
         RED.nodes.createNode(this, config);
@@ -87,11 +91,17 @@ module.exports = function (RED) {
     }
     RED.nodes.registerType("wamp out", WampClientOutNode);
 
+//-------------------------------------------------------------------------------------------------------------------
+
     function WampClientInNode(config) {
         RED.nodes.createNode(this, config);
         this.role = config.role;
         this.router = config.router;
         this.topic = config.topic;
+		
+//EM		
+		RED.log.info("WampClientInNode(subscriber): role: " + this.role + ". router: " + this.router + ". topic: " + this.topic);				
+
 
         this.clientNode = RED.nodes.getNode(this.router);
 
@@ -108,11 +118,20 @@ module.exports = function (RED) {
 
             switch (this.role) {
                 case "subscriber":
-                    node.wampClient.subscribe(this.topic, function (args, kwargs) {
-                        var msg = {topic: this.topic,  payload: {args: args, kwargs: kwargs}};
+				
+//EM				
+		RED.log.info("WampClientInNode(subscriber): Call to node.wampClient.subscribe().");				
+				
+                    node.wampClient.subscribe(this.topic,
+     					function (args, kwargs)
+     					{
+							var msg = {topic: this.topic,  payload: {args: args, kwargs: kwargs}
+						};
                         node.send(msg);
                     });
                     break;
+
+
                 case "calleeReceiver":
                     node.wampClient.registerProcedure(this.topic, function (args, kwargs) {
                         RED.log.debug("procedure: " + args +", " +kwargs);
@@ -122,6 +141,8 @@ module.exports = function (RED) {
                         return d.promise;
                     });
                     break;
+
+
                 default:
                     RED.log.error("the role ["+this.role+"] is not recognized.");
                     break;
@@ -140,6 +161,7 @@ module.exports = function (RED) {
     }
     RED.nodes.registerType("wamp in", WampClientInNode);
 
+//-------------------------------------------------------------------------------------------------------------------
 
     function WampClientCallNode(config) {
         RED.nodes.createNode(this, config);
@@ -189,6 +211,72 @@ module.exports = function (RED) {
     }
     RED.nodes.registerType("wamp call", WampClientCallNode);
 	
+	//-----------------------------------------------------------------------------------------------------------------
+	
+    function WampClientSubscribe(config)
+	{
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = config.procedure;
+
+	
+        this.clientNode = RED.nodes.getNode(this.router)
+
+		RED.log.info("WampClientSubscribe() Enter.");	
+
+        if (this.clientNode)
+		{
+			RED.log.info("WampClientSubscribe() ClientNode OK.");
+
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input",
+				function (msg)
+    			{
+ 
+					this.topic = msg.topic;
+
+                    node.wampClient.subscribe(this.topic,
+     					function (args, kwargs)
+     					{
+							var msg1 = {topic: this.topic,  payload: {args: args, kwargs: kwargs}
+						};
+                        node.send(msg1);
+                    });
+
+					RED.log.info("WampClientSubscribe: router: " + this.router + ". procedure: " + this.procedure + ". uri: " + this.topic);	
+				}
+
+			);	
+			
+			
+			
+    		RED.log.info("WampClientSubscribe() ClientNode EXIT.");
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done)
+		{
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+			RED.log.info("WampClientSubscribe() ClientNode CLOSE.");
+        });
+    }
+    RED.nodes.registerType("wamp subs", WampClientSubscribe);
+	
+//-------------------------------------------------------------------------------------------------------------------	
 	
 	async function GetToken(id, passw, address)
 	{
@@ -246,9 +334,6 @@ module.exports = function (RED) {
 		}
 		return _token;	
 	}
-
-
-
 
     var wampClientPool = (function ()
 	{
