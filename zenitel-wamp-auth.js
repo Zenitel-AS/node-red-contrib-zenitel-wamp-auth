@@ -41,55 +41,55 @@ module.exports = function (RED) {
 
 //-------------------------------------------------------------------------------------------------------------------
 
-    function WampClientOutNode(config) {
-        RED.nodes.createNode(this, config);
-        this.router = config.router;
-        this.role = config.role;
-        this.topic = config.topic;
-        this.clientNode = RED.nodes.getNode(this.router);
+    // function WampClientOutNode(config) {
+        // RED.nodes.createNode(this, config);
+        // this.router = config.router;
+        // this.role = config.role;
+        // this.topic = config.topic;
+        // this.clientNode = RED.nodes.getNode(this.router);
 
-        if (this.clientNode) {
-            var node = this;
-            node.wampClient = this.clientNode.wampClient();
+        // if (this.clientNode) {
+            // var node = this;
+            // node.wampClient = this.clientNode.wampClient();
 
-            this.clientNode.on("ready", function () {
-                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
-            });
-            this.clientNode.on("closed", function () {
-                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
-            });
+            // this.clientNode.on("ready", function () {
+                // node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            // });
+            // this.clientNode.on("closed", function () {
+                // node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            // });
 
-            node.on("input", function (msg) {
-                if (msg.hasOwnProperty("payload")) {
-                    var payload = msg.payload;
-                    switch (this.role) {
-                        case "publisher":
-                            RED.log.info("wamp client publish: topic=" + this.topic + ", payload=" + JSON.stringify(payload));
-                            payload && node.wampClient.publish(this.topic, payload);
-                            break;
-                        case "calleeResponse":
-                            RED.log.info("wamp client callee response=" + JSON.stringify(payload));
-                            msg._d && msg._d.resolve(payload);
-                            break;
-                        default:
-                            RED.log.error("the role ["+this.role+"] is not recognized.");
-                            break;
-                    }
-                }
-            });
-        } else {
-            RED.log.error("wamp client config is missing!");
-        }
+            // node.on("input", function (msg) {
+                // if (msg.hasOwnProperty("payload")) {
+                    // var payload = msg.payload;
+                    // switch (this.role) {
+                        // case "publisher":
+                            // RED.log.info("wamp client publish: topic=" + this.topic + ", payload=" + JSON.stringify(payload));
+                            // payload && node.wampClient.publish(this.topic, payload);
+                            // break;
+                        // case "calleeResponse":
+                            // RED.log.info("wamp client callee response=" + JSON.stringify(payload));
+                            // msg._d && msg._d.resolve(payload);
+                            // break;
+                        // default:
+                            // RED.log.error("the role ["+this.role+"] is not recognized.");
+                            // break;
+                    // }
+                // }
+            // });
+        // } else {
+            // RED.log.error("wamp client config is missing!");
+        // }
 
-        this.on("close", function(done) {
-            if (this.clientNode) {
-                this.clientNode.close(done);
-            } else {
-                done();
-            }
-        });
-    }
-    RED.nodes.registerType("wamp out", WampClientOutNode);
+        // this.on("close", function(done) {
+            // if (this.clientNode) {
+                // this.clientNode.close(done);
+            // } else {
+                // done();
+            // }
+        // });
+    // }
+    // RED.nodes.registerType("wamp out", WampClientOutNode);
 
 //-------------------------------------------------------------------------------------------------------------------
 
