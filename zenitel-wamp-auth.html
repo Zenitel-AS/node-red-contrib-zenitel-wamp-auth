@@ -1,168 +1,2557 @@
-<script type="text/x-red" data-template-name="wamp in">
-    <div class="form-row">
-        <label for="node-input-role"><i class="fa fa-dot-circle-o"></i> <span data-i18n="wamp.label.role"></span></label>
-        <select type="text" id="node-input-role" style="width:70%;">
-            <option value="subscriber" data-i18n="wamp.label.subscriber.role.subscriber"></option>
-            <option value="calleeReceiver" data-i18n="wamp.label.subscriber.role.calleeReceiver"></option>
-        </select>
-    </div>
-    <div class="form-row node-input-router">
-        <label for="node-input-router" style="width: 110px;"><i class="fa fa-bookmark"></i> <span data-i18n="wamp.label.router"></span></label>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Event|1| Node for directly reading General Purpose Inputs on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel GPI Event">
+	<div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
         <input type="text" id="node-input-router">
     </div>
     <div class="form-row">
-        <label for="node-input-topic" style="width: 110px;"><i class="fa fa-envelope"></i> <span data-i18n="wamp.label.destination"></span></label>
-        <input type="text" id="node-input-topic" data-i18n="[placeholder]wamp.placeholder.subscriber.destination">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+		<input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-GPinput" style="width: 120px;"><i class="fa fa-arrow-right"></i> <span data-i18n="wamp.label.GPinput"> Input: </span></label>
+		<select type="text" id="node-input-GPinput" style="width:70%;">
+            <option value="">All</option>
+            <option value="gpio1">Input 1</option>
+			<option value="gpio2">Input 2</option>
+			<option value="gpio3">Input 3</option>
+			<option value="gpio4">Input 4</option>
+			<option value="gpio5">Input 5</option>
+			<option value="gpio6">Input 6</option>
+			<option value="e_gpio1">External Input 1</option>
+			<option value="e_gpio2">External Input 2</option>
+			<option value="e_gpio3">External Input 3</option>
+			<option value="e_gpio4">External Input 4</option>
+			<option value="e_gpio5">External Input 5</option>
+			<option value="e_gpio6">External Input 6</option>
+			<option value="e_gpio7">External Input 7</option>
+			<option value="e_gpio8">External Input 8</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-GPstate" style="width: 120px;"><i class="fa fa-sliders"></i> <span data-i18n="wamp.label.GPstate"> State: </span></label>
+		<select type="text" id="node-input-GPstate" style="width:70%;">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+			<option value="">Both</option>
+        </select>
     </div>
     <div class="form-row">
-        <label for="node-input-name" style="width: 110px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
         <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
     </div>
 </script>
 
-<script type="text/x-red" data-help-name="wamp in">
-   <p>Connects to a WAMP router and subscribes a topic or registers a procedure to listen on.</p>
-   <p>Outputs an object called <code>msg</code> containing <code>msg.topic</code> (or <code>msg.procedure</code>) and
-   <code>msg.payload</code>. msg.payload contains args, which is an array or null and kwargs, which is an object or null.</p>
+<script type="text/x-red" data-help-name="Zenitel GPI Event">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and subscribes to General Purpose Input events.</p>
+   <p>For a more detailed description of the node go to <a href="https://wiki.zenitel.wikibase.nl/wiki/Draft:Node-Red_-_Zenitel_Event_Nodes#Zenitel_GPI_Event">Zenitel Wiki</a></p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>Dirno:</code> which is to filter on events from a specific device.</li>
+   <li><code>Input:</code> which is to filter on a specific input.</li>
+   <li><code>State:</code> which is to filter on a specific state of the input.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>dirno</code> which is the directory number of the station the GPI event was triggered on.</li>
+   <li><code>gpis</code> which is a mapping of all the current states of the GPI on the device.</li>
+   <li><code>id</code> which is the identification of the GPI that has changed state.</li>
+   <li><code>state</code> which is the new state of the GPI that has changed state.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
 </script>
 
 <script type="text/javascript">
-    RED.nodes.registerType('wamp in',{
-        category: 'input',      // the palette category
+    function zenitelDirnoIsValid(value) {
+        var str = (value === undefined || value === null) ? "" : ("" + value).trim();
+        if (str === "") {
+            return true;
+        }
+        return /^\d+$/.test(str);
+    }
+
+    function zenitelAttachDirnoWarning(node) {
+        zenitelDetachDirnoWarning(node);
+
+        if (!node || typeof $ === "undefined") {
+            return;
+        }
+
+        var $fields = $("#dialog-form").find("input").filter(function () {
+            var id = (this.id || "").toLowerCase();
+            if (id.indexOf("dirno") === -1) {
+                return false;
+            }
+            var type = (this.type || "").toLowerCase();
+            return !type || type === "text" || type === "number" || type === "tel";
+        });
+
+        if (!$fields.length) {
+            return;
+        }
+
+        function closeWarning() {
+            if (node.__dirnoWarning) {
+                node.__dirnoWarning.close();
+                node.__dirnoWarning = null;
+            }
+        }
+
+        function ensureWarning() {
+            if (!node.__dirnoWarning) {
+                node.__dirnoWarning = RED.notify("Dirno fields must contain digits only.", {
+                    type: "warning",
+                    timeout: 0
+                });
+            }
+        }
+
+        function handleInput() {
+            var allValid = true;
+            $fields.each(function () {
+                if (!zenitelDirnoIsValid($(this).val())) {
+                    allValid = false;
+                    return false;
+                }
+            });
+            if (allValid) {
+                closeWarning();
+            } else {
+                ensureWarning();
+            }
+        }
+
+        node.__dirnoWarningCleanup = function () {
+            $fields.off(".zenitelDirno");
+            closeWarning();
+        };
+
+        $fields.on("input.zenitelDirno change.zenitelDirno", handleInput);
+        handleInput();
+    }
+
+    function zenitelDetachDirnoWarning(node) {
+        if (node && typeof node.__dirnoWarningCleanup === "function") {
+            node.__dirnoWarningCleanup();
+            node.__dirnoWarningCleanup = null;
+        }
+        if (node && node.__dirnoWarning) {
+            node.__dirnoWarning.close();
+            node.__dirnoWarning = null;
+        }
+    }
+
+    function zenitelApplyDirnoEditHandlers(definition) {
+        var originalPrepare = definition.oneditprepare;
+        definition.oneditprepare = function () {
+            if (typeof originalPrepare === "function") {
+                originalPrepare.apply(this, arguments);
+            }
+            zenitelAttachDirnoWarning(this);
+        };
+
+        function wrapWithDetach(original) {
+            return function () {
+                if (typeof original === "function") {
+                    original.apply(this, arguments);
+                }
+                zenitelDetachDirnoWarning(this);
+            };
+        }
+
+        definition.oneditsave = wrapWithDetach(definition.oneditsave);
+        definition.oneditcancel = wrapWithDetach(definition.oneditcancel);
+        definition.oneditdelete = wrapWithDetach(definition.oneditdelete);
+
+        return definition;
+    }
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel GPI Event', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Events',      // the palette category
+        defaults: {    
+			router: {type: "wamp-client", required: true},
+            dirno: {value:"", validate: zenitelDirnoIsValid},
+			GPinput: {value:""},
+			GPstate: {value:""},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:0,               // set the number of inputs - only 0 or 1
+        outputs:1,              // set the number of outputs - 0 to n
+        // set the icon (held in icons dir below where you save the node)
+        icon: "ZenLogo.png",     // saved in  icons/myicon.png
+        label: function() {     // sets the default label contents
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel GPI Event");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Event|2| Node for directly reading General Purpose Outputs on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel GPO Event">
+	<div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+		<input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-GPoutput" style="width: 120px;"><i class="fa fa-arrow-left"></i> <span data-i18n="wamp.label.GPoutput"> Output: </span></label>
+		<select type="text" id="node-input-GPoutput" style="width:70%;">
+            <option value="">All</option>
+            <option value="gpio1">Output 1</option>
+			<option value="gpio2">Output 2</option>
+			<option value="gpio3">Output 3</option>
+			<option value="gpio4">Output 4</option>
+			<option value="gpio5">Output 5</option>
+			<option value="gpio6">Output 6</option>
+			<option value="relay1">Relay 1</option>
+			<option value="relay2">Relay 2</option>
+			<option value="relay3">Relay 3</option>
+			<option value="relay4">Relay 4</option>
+			<option value="relay5">Relay 5</option>
+			<option value="relay6">Relay 6</option>
+			<option value="relay7">Relay 7</option>
+			<option value="relay8">Relay 8</option>
+			<option value="e_relay1">External Relay 1</option>
+			<option value="e_relay2">External Relay 2</option>
+			<option value="e_relay3">External Relay 3</option>
+			<option value="e_relay4">External Relay 4</option>
+			<option value="e_relay5">External Relay 5</option>
+			<option value="e_relay6">External Relay 6</option>
+			<option value="e_relay7">External Relay 7</option>
+			<option value="e_relay8">External Relay 8</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-GPstate" style="width: 120px;"><i class="fa fa-sliders"></i> <span data-i18n="wamp.label.GPstate"> State: </span></label>
+		<select type="text" id="node-input-GPstate" style="width:70%;">
+            <option value="set">Active</option>
+            <option value="clear">Inactive</option>
+			<option value="fast_blink">Fast Blink</option>
+			<option value="slow_blink">Slow Blink</option>
+			<option value="">All</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel GPO Event">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and subscribes to General Purpose Output events.</p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>Dirno:</code> which is to filter on events from a specific device.</li>
+   <li><code>Output:</code> which is to filter on a specific output.</li>
+   <li><code>State:</code> which is to filter on a specific state of the output.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>dirno</code> which is the directory number of the station the GPO event was triggered on.</li>
+   <li><code>gpios</code> which is a mapping of all the current states of the GPO on the device.</li>
+   <li><code>id</code> which is the identification of the GPI that has changed state.</li>
+   <li><code>operation</code> which is the new state of the GPO that has changed state.</li>
+   <li><code>relays</code> which is the state of the relays on the device.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel GPO Event', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Events',      // the palette category
+        defaults: {    
+			router: {type: "wamp-client", required: true},
+            dirno: {value:"", validate: zenitelDirnoIsValid},
+			GPoutput: {value:""},
+			GPstate: {value:""},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:0,               // set the number of inputs - only 0 or 1
+        outputs:1,              // set the number of outputs - 0 to n
+        // set the icon (held in icons dir below where you save the node)
+        icon: "ZenLogo.png",     // saved in  icons/myicon.png
+        label: function() {     // sets the default label contents
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel GPO Event");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Event|3| Node for directly reading Door open events on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Door Open">
+	<div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-door_dirno" style="width: 120px;"><i class="fa fa-unlock"></i> <span data-i18n="wamp.label.door_dirno"> Door Dirno: </span></label>
+		<input type="text" id="node-input-door_dirno" data-i18n="[placeholder]Door Dirno">
+    </div>
+    <div class="form-row">
+        <label for="node-input-from_dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.from_dirno"> From Dirno: </span></label>
+		<input type="text" id="node-input-from_dirno" data-i18n="[placeholder]From Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Door Open">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and subscribes to Door Open events.</p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>Door Dirno:</code> which is to filter on door open events on a specific device.</li>
+   <li><code>From Dirno:</code> which is to filter on which dirno is doing the door opening.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>from_dirno</code> which is the directory number of the station that triggered the Door Open event.</li>
+   <li><code>from_name</code> which is the corresponding name for the from_dirno.</li>
+   <li><code>door_dirno</code> which is the directory number of the station the Door Open event was triggered on.</li>
+   <li><code>door_name</code> which is the corresponding name for the from_dirno.</li>
+   <li><code>gpo</code> which is the identification of the GPO that was triggered for the Door Open event.</li>
+   <ul>
+   <li><code>id</code> which is the id of the relay that was triggered.</li>
+   <li><code>mac_address</code> which is the mac_address of the device where the relay was triggered.</li>
+   <li><code>time</code> which is the time for which the relay was on.</li>
+   </ul>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Door Open', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Events',      // the palette category
+        defaults: {    
+			router: {type: "wamp-client", required: true},
+            door_dirno: {value:"", validate: zenitelDirnoIsValid},
+            from_dirno: {value:"", validate: zenitelDirnoIsValid},
+			name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:0,               // set the number of inputs - only 0 or 1
+        outputs:1,              // set the number of outputs - 0 to n
+        // set the icon (held in icons dir below where you save the node)
+        icon: "ZenLogo.png",     // saved in  icons/myicon.png
+        label: function() {     // sets the default label contents
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Door Opening Event");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Event|4| Node for directly reading call states on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Call State">
+	<div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-fromdirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.fromdirno"> From Dirno: </span></label>
+		<input type="text" id="node-input-fromdirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-todirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.todirno"> To Dirno: </span></label>
+		<input type="text" id="node-input-todirno" data-i18n="[placeholder]Dirno">
+    </div>
+    <div class="form-row">
+        <label for="node-input-calltype" style="width: 120px;"><i class="fa fa-phone"></i> <span data-i18n="wamp.label.callstype"> Call type: </span></label>
+		<select type="text" id="node-input-calltype" style="width:70%;">
+            <option value="">All</option>
+            <option value="normal_call">Normal call</option>
+			<option value="queue_call">Queue call</option>
+            <option value="group_call">Group call</option>
+            <option value="message_play">Message play</option>
+            <option value="activation_call">Activation call</option>
+			  </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-callstate" style="width: 120px;"><i class="fa fa-volume-control-phone"></i> <span data-i18n="wamp.label.callstate"> Call state: </span></label>
+		<select type="text" id="node-input-callstate" style="width:70%;">
+            <option value="">All</option>
+            <option value="init">Initilazed</option>
+            <option value="ringing">Ringing</option>
+			<option value="in_call">In call</option>
+			<option value="ended">Ended</option>
+            <option value="forwarding">Forwarding</option>
+            <option value="queued">Queued</option>
+			</select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-reason" style="width: 120px;"><i class="fa fa-check"></i> <span data-i18n="wamp.label.callstate"> Reason: </span></label>
+		<select type="text" id="node-input-reason" style="width:70%;">
+            <option value="">All</option>
+            <option value="accept">Accepted</option>
+            <option value="hangup">Hangup</option>
+			<option value="cancel">Canceled</option>
+            <option value="unreachable">Unreachable</option>
+            <option value="incoming">Incoming</option>
+            <option value="rpc">RPC</option>
+            <option value="busy">Busy</option>
+            <option value="incomplete">Incomplete</option>
+            <option value="timeout">Timeout</option>
+            <option value="progress">Progress</option>
+            <option value="unconditional">Unconditional</option>
+            <option value="from_ring">From ring</option>
+            <option value="other_answer">Other answer</option>
+            <option value="auto_answer">Auto answer</option>
+            <option value="reject">Reject</option>
+            <option value="success">Success</option>
+            <option value="failure">Failure</option>
+            <option value="priority">Priority</option>
+            <option value="server_hangup">Server hangup</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Call State">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and subscribes to Call State events.</p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>From Dirno:</code> which is to filter on calls from a specific device.</li>
+   <li><code>To Dirno:</code> which is to filter on calls to a specific device.</li>
+   <li><code>Call Type:</code> which is to filter on the type of call
+   <li><code>State:</code> which is to filter on a specific state of the call.</li>
+   <li><code>Reason:</code> which is to filter on a specific reason for the call being ended and is thus only used with Call State <code>ended</code>.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>dirno</code> which is the directory number of the station the GPI event was triggered on.</li>
+   <li><code>gpis</code> which is a mapping of all the current states of the GPI on the device.</li>
+   <li><code>id</code> which is the identification of the GPI that has changed state.</li>
+   <li><code>state</code> which is the new state of the GPI that has changed state.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Call State', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Events',      // the palette category
+        defaults: {    
+			router: {type: "wamp-client", required: true},
+            fromdirno: {value:"", validate: zenitelDirnoIsValid},
+			todirno: {value:"", validate: zenitelDirnoIsValid},
+			calltype: {value:""},
+			callstate: {value:""},
+			reason: {value:""},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:0,               // set the number of inputs - only 0 or 1
+        outputs:1,              // set the number of outputs - 0 to n
+        // set the icon (held in icons dir below where you save the node)
+        icon: "ZenLogo.png",     // saved in  icons/myicon.png
+        label: function() {     // sets the default label contents
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Call State Event");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Event|5| Node for directly reading device states of a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Device State">
+	<div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+		<input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-state" style="width: 120px;"><i class="fa fa-sliders"></i> <span data-i18n="wamp.label.state"> Device state: </span></label>
+		<select type="text" id="node-input-state" style="width:70%;">
+            <option value="">All</option>
+            <option value="unkown">Unknown</option>
+			<option value="reachable">Reachable</option>
+			<option value="unreachable">Unreachable</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Device State">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and subscribes to Device State events.</p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>Dirno:</code> which is to filter on a specific device.</li>
+   <li><code>State:</code> which is to filter on a specific state of the device.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>dirno</code> which is the directory number of the station the Device State event was triggered on.</li>
+   <li><code>name</code> which corresponds to the dirno.</li>
+   <li><code>location</code> which is the location as configured in Zenitel Connect Pro.</li>
+   <li><code>device_ip</code> which is the IP address of the device as stored in Zenitel Connect Pro.</li>
+	<li><code>device_type</code> which is the type of the device as configured in Zenitel Connect Pro.</li>
+   <li><code>state</code> which is the new state of the device.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Device State', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Events',      // the palette category
+        defaults: {    
+			router: {type: "wamp-client", required: true},
+            dirno: {value:"", validate: zenitelDirnoIsValid},
+			state: {value:""},
+			name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:0,               // set the number of inputs - only 0 or 1
+        outputs:1,              // set the number of outputs - 0 to n
+        // set the icon (held in icons dir below where you save the node)
+        icon: "ZenLogo.png",     // saved in  icons/myicon.png
+        label: function() {     // sets the default label contents
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Device State Event");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Event|6| Node for directly reading Event triggers from ZCP	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Event Trigger">
+	<div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-eventno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.eventno"> Eventno: </span></label>
+		<input type="text" id="node-input-eventno" data-i18n="[placeholder]Eventno">
+    </div>
+	 <div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+		<input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Event Trigger">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and subscribes to Event Trigger events.</p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>Eventno:</code> which is to filter on specific event numbers.</li>
+   <li><code>Dirno:</code> which is to filter on events from a specific device.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>from_dirno</code> which is the directory number of the station that dialed the Event trigger.</li>
+   <li><code>to_dirno</code> which is the Event trigger dialed.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Event Trigger', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Events',      // the palette category
+        defaults: {    
+			router: {type: "wamp-client", required: true},
+            eventno: {value:""},
+			dirno: {value:"", validate: zenitelDirnoIsValid},
+			name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:0,               // set the number of inputs - only 0 or 1
+        outputs:1,              // set the number of outputs - 0 to n
+        // set the icon (held in icons dir below where you save the node)
+        icon: "ZenLogo.png",     // saved in  icons/myicon.png
+        label: function() {     // sets the default label contents
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Event Trigger Event");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Event|7| Node for directly reading extended states of a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Extended State">
+	<div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.fromdirno"> Dirno: </span></label>
+		<input type="text" id="node-input-fromdirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-testtype" style="width: 120px;"><i class="fa fa-check"></i> <span data-i18n="wamp.label.testtype"> Test Type: </span></label>
+		<select type="text" id="node-input-testtype" style="width:70%;">
+            <option value="">All</option>
+            <option value="buttontest">Buttontest</option>
+			<option value="tonetest">Tonetest</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-testresult" style="width: 120px;"><i class="fa fa-check"></i> <span data-i18n="wamp.label.testresult"> Test Result: </span></label>
+		<select type="text" id="node-input-testresult" style="width:70%;">
+            <option value="">All</option>
+            <option value="passed">Passed</option>
+			<option value="failed">Failed</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Extended State">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and subscribes to Extended State events.</p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>Dirno</code> which is to filter on events from a specific device.</li>
+   <li><code>Test Type</code> which is to filter on a specific Test Type.</li>
+   <li><code>State</code> which is to filter on a specific Test Result.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>current_status</code> which is the current status of the test.</li>
+   <li><code>device_id</code> ??.</li>
+   <li><code>dirno</code> which is the identification of the station for the status.</li>
+   <li><code>error_message</code> which is the current status of the test with the test values.</li>
+   <li><code>last_fail</code> which is the timestamp for the last time the test failed.</li>
+   <li><code>last_pass</code> which is the timestamp for the last time the test passed.</li>
+   <li><code>last_queued</code> which is the timestamp for the last time the test was queued.</li>
+   <li><code>pending_test</code> shows if there are any pending tests.</li>
+   <li><code>status_type</code> whos the type of test.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Extended State', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Events',      // the palette category
+        defaults: {    
+			router: {type: "wamp-client", required: true},
+            dirno: {value:"", validate: zenitelDirnoIsValid},
+			testtype: {value:""},
+			testresult: {value:""},
+			name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:0,               // set the number of inputs - only 0 or 1
+        outputs:1,              // set the number of outputs - 0 to n
+        // set the icon (held in icons dir below where you save the node)
+        icon: "ZenLogo.png",     // saved in  icons/myicon.png
+        label: function() {     // sets the default label contents
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Extended State Event");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Event|8| Node for generic subscriptions	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel WAMP In">
+
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-topic" style="width: 120px;"><i class="fa fa-envelope"></i> <span data-i18n="wamp.label.destination"> Event: </span></label>
+        <select type="text" id="node-input-topic" style="width:70%;">
+            <option value="com.zenitel.call">Call State</option>
+            <option value="com.zenitel.call_leg">Call Legs</option>
+			      <option value="com.zenitel.system.event_trigger">Event Trigger</option>
+			      <option value="com.zenitel.device.gpo">General Purpose Output</option>
+			      <option value="com.zenitel.device.gpi">General Purpose Input</option>
+			      <option value="com.zenitel.system.device_account">Device State</option>
+			      <option value="com.zenitel.system.open_door">Door Open</option>
+			      <option value="com.zenitel.wamp.session.on_join">WAMP Session Join</option>
+			      <option value="com.zenitel.wamp.session.on_leave">WAMP Session Leave</option>
+			      <option value="com.zenitel.system.device.extended_status">Extended Status</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel WAMP In">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and subscribes to the event selected in the drop down.</p>
+   <p>The node will output the received WAMP messaged unfiltered. To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+   </p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel WAMP In',{
+        category: 'Zenitel Events',      // the palette category
         defaults: {             // defines the editable properties of the node
-            role: {value: "subscriber", required: true},
             router: {type: "wamp-client", required: true},
             topic: {value:"", required: true},
             name: {value:""}
         },
-        color:"#79d8bf",
+        color:"#ffd400",
         inputs:0,               // set the number of inputs - only 0 or 1
         outputs:1,              // set the number of outputs - 0 to n
         // set the icon (held in icons dir below where you save the node)
-        icon: "bridge.png",     // saved in  icons/myicon.png
+        icon: "ZenLogo.png",     // saved in  icons/myicon.png
         label: function() {     // sets the default label contents
             var wampNode = RED.nodes.node(this.router);
-            return this.name || this.topic || (wampNode ? wampNode.label() : this._("wamp.label.wamp"));
+            return this.name || this.topic || this._("Zenitel WAMP In");
         },
         labelStyle: function() { // sets the class to apply to the label
             return this.name?"node_label_italic":"";
         }
     });
 </script>
-
-<!-- 
-<script type="text/x-red" data-template-name="wamp out">
-    <div class="form-row">
-        <label for="node-input-role"><i class="fa fa-dot-circle-o"></i> <span data-i18n="wamp.label.role"></span></label>
-        <select type="text" id="node-input-role" style="width:70%;">
-            <option value="publisher" data-i18n="wamp.label.publisher.role.publisher"></option>
-            <option value="calleeResponse" data-i18n="wamp.label.publisher.role.calleeResponse"></option>
-        </select>
-    </div>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|1| Node for directly setting up calls on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Call Setup">
     <div class="form-row node-input-router">
-        <label for="node-input-router" style="width: 110px;"><i class="fa fa-bookmark"></i> <span data-i18n="wamp.label.router"></span></label>
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
         <input type="text" id="node-input-router">
     </div>
     <div class="form-row">
-        <label for="node-input-topic" style="width: 110px;"><i class="fa fa-envelope"></i> <span data-i18n="wamp.label.destination"></label>
-        <input type="text" id="node-input-topic" data-i18n="[placeholder]wamp.placeholder.publisher.destination">
+        <label for="node-input-fromdirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.fromdirno"> From Dirno: </span></label>
+        <input type="text" id="node-input-fromdirno" data-i18n="[placeholder]Dirno">
     </div>
-    <div class="form-row">
-        <label for="node-input-name" style="width: 110px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+	<div class="form-row">
+        <label for="node-input-todirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.todirno"> To Dirno: </span></label>
+        <input type="text" id="node-input-todirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-priority" style="width: 120px;"><i class="fa fa-sort-numeric-asc"></i> <span data-i18n="wamp.label.priority"> Priority: </span></label>
+        <input type="text" id="node-input-priority" data-i18n="[placeholder]Priority">
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
         <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
     </div>
-</script> -->
 
-<!-- <script type="text/x-red" data-help-name="wamp out">
-   <p>Connects to WAMP router and publishes messages or returns callee's result.</p>
-   <p>Only the <code>msg.payload</code> is sent.</p>
-   <p>When in Callee Response role, the topic is not used.</p>
-</script> -->
+</script>
 
-<!-- <script type="text/javascript">
-    RED.nodes.registerType('wamp out',{
-        category: 'output',      // the palette category
+<script type="text/x-red" data-help-name="Zenitel Call Setup">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute a to trigger a call setup.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The properties are as follows:
+   <ul>
+   <li><code>From Dirno:</code> is a string to define the originating directory number.</li>
+   <li><code>To Dirno:</code> is a string to define the receiving directory number.</li>
+   <li><code>Priority: </code> is an integer to define the call setup priority.</li>
+   </ul>
+   </p>
+   <p>If the node is used with the <code>msg.payload</code> it must be a JSON object with the following items to complete the properties in the properties window:
+   <ul>
+   <li><code>from_dirno</code> is a string to define the originating directory number. This must be present if the From Dirno: field is left empty.</li>
+   <li><code>to_dirno</code> is a string to define the receiving directory number. This must be present if the To Dirno: field is left empty.</li>
+   <li><code>priority</code> is an integer to define the call setup priority. This can be present but if missing in the JSON object and the properties window it will default to 40.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    function zenitelCallPriorityIsValid(value) {
+        var str = (value === undefined || value === null) ? "" : ("" + value).trim();
+        if (str === "") {
+            return true;
+        }
+        if (!/^\d+$/.test(str)) {
+            return false;
+        }
+        var num = parseInt(str, 10);
+        return num >= 1 && num <= 250;
+    }
+
+    function zenitelCallSetupAttachPriorityWarning(node) {
+        zenitelCallSetupDetachPriorityWarning(node);
+
+        var $priority = $("#node-input-priority");
+        if (!$priority.length) {
+            return;
+        }
+
+        function closeWarning() {
+            if (node.__priorityWarning) {
+                node.__priorityWarning.close();
+                node.__priorityWarning = null;
+            }
+        }
+
+        function ensureWarning() {
+            if (!node.__priorityWarning) {
+                node.__priorityWarning = RED.notify("Priority must be a number between 1 and 250.", {
+                    type: "warning",
+                    timeout: 0
+                });
+            }
+        }
+
+        function handlePriorityInput() {
+            if (zenitelCallPriorityIsValid($priority.val())) {
+                closeWarning();
+            } else {
+                ensureWarning();
+            }
+        }
+
+        node.__priorityWarningCleanup = function () {
+            $priority.off(".zenitelPriority");
+            closeWarning();
+        };
+
+        $priority.on("input.zenitelPriority change.zenitelPriority", handlePriorityInput);
+        handlePriorityInput();
+    }
+
+    function zenitelCallSetupDetachPriorityWarning(node) {
+        if (node && typeof node.__priorityWarningCleanup === "function") {
+            node.__priorityWarningCleanup();
+            node.__priorityWarningCleanup = null;
+        }
+        if (node && node.__priorityWarning) {
+            node.__priorityWarning.close();
+            node.__priorityWarning = null;
+        }
+    }
+
+    RED.nodes.registerType('Zenitel Call Setup', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Actions',      // the palette category
         defaults: {             // defines the editable properties of the node
-            role: {value: "publisher", required: true},
             router: {type: "wamp-client", required: true},
-            topic: {value:"", required: false},
+            fromdirno: {value:"", validate: zenitelDirnoIsValid},
+			todirno: {value:"", validate: zenitelDirnoIsValid},
+			priority: {
+                value:"",
+                validate: function(v) {
+                    return zenitelCallPriorityIsValid(v);
+                }
+            },
+			name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "right",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Call Setup");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        },
+        oneditprepare: function () {
+            zenitelCallSetupAttachPriorityWarning(this);
+        },
+        oneditsave: function () {
+            zenitelCallSetupDetachPriorityWarning(this);
+        },
+        oneditcancel: function () {
+            zenitelCallSetupDetachPriorityWarning(this);
+        },
+        oneditdelete: function () {
+            zenitelCallSetupDetachPriorityWarning(this);
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|2| Node for directly playing an audio message on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Play Audio Message">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-audiomsgdirno" style="width: 120px;"><i class="fa fa-file-audio-o"></i> <span data-i18n="wamp.label.audiomsgdirno"> Audio message: </span></label>
+        <input type="text" id="node-input-audiomsgdirno" data-i18n="[placeholder]Audiomessage">
+    </div>
+	<div class="form-row">
+        <label for="node-input-todirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.todirno"> To Dirno: </span></label>
+        <input type="text" id="node-input-todirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Play Audio Message">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute a trigger playing an audio message.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The properties are as follows:
+   <ul>
+   <li><code>Audio message:</code> is a string to define the audio message to play.</li>
+   <li><code>To Dirno:</code> is a string to define the directory number of the station or group to play the message to.</li>
+   </ul>
+   </p>
+   <p>If the node is used with the <code>msg.payload</code> it must be a JSON object with the following items to complete the properties in the properties window:
+   <ul>
+   <li><code>from_dirno</code> is a string to define the audio message number. This must be present if the Audio message: field is left empty.</li>
+   <li><code>to_dirno</code> is a string to define the receiving directory number. This must be present if the To Dirno: field is left empty.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Play Audio Message', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Actions',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            audiomsgdirno: {value:"", validate: zenitelDirnoIsValid},
+			todirno: {value:"", validate: zenitelDirnoIsValid},
             name: {value:""}
         },
-        color:"#79d8bf",
+        color:"#ffd400",
         inputs:1,
-        outputs:0,
-        icon: "white-globe.png",
+        outputs:1,
+        icon: "ZenLogo.png",
         align: "right",
-        label: function() {     // sets the default label contents
+        label: function() {
             var wampNode = RED.nodes.node(this.router);
-            return this.name || this.topic || (wampNode ? wampNode.label() : this._("wamp.label.wamp"));
+            return this.name || this._("Zenitel Play Audio Message");
         },
         labelStyle: function() { // sets the class to apply to the label
             return this.name?"node_label_italic":"";
         }
-    }); -->
+    }));
 </script>
-
-
-
-<script type="text/x-red" data-template-name="wamp call">
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|3| Node for directly door opening on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Door Opener">
     <div class="form-row node-input-router">
-        <label for="node-input-router" style="width: 110px;"><i class="fa fa-bookmark"></i> <span data-i18n="wamp.label.router"></span></label>
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
         <input type="text" id="node-input-router">
     </div>
-    <div class="form-row">
-        <label for="node-input-procedure" style="width: 110px;"><i class="fa fa-envelope"></i> <span data-i18n="wamp.label.procedure"></span></label>
-        <input type="text" id="node-input-procedure" data-i18n="[placeholder]wamp.placeholder.procedure">
+   	<div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-unlock"></i> <span data-i18n="wamp.label.dirno"> Door Dirno: </span></label>
+        <input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
     </div>
     <div class="form-row">
-        <label for="node-input-name" style="width: 110px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
         <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
     </div>
 
 </script>
 
-<script type="text/x-red" data-help-name="wamp call">
-   <p>Provides a connection to other WAMP client.</p>
-   <p>Only the <code>msg.payload</code> is sent.</p>
+<script type="text/x-red" data-help-name="Zenitel Door Opener">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute a trigger a door open action.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The properties are as follows:
+   <ul>
+   <li><code>Dirno:</code> is a string to define the station where the door opening action is to be triggered.</li>
+   </ul>
+   </p>
+   <p>If the node is used with the <code>msg.payload</code> it must be a JSON object with the following items to complete the properties in the properties window:
+   <ul>
+   <li><code>from_dirno</code> is a string to define the station where the door opening action is to be triggered from. This must be present if the Dirno: field is left empty.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
 </script>
 
 <script type="text/javascript">
-    RED.nodes.registerType('wamp call',{
-        category: 'function',      // the palette category
+    RED.nodes.registerType('Zenitel Door Opener', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Actions',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+			dirno: {value:"", validate: zenitelDirnoIsValid},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "right",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Door Opener");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|4| Node for triggering an output on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel GPO Trigger">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+   	<div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+        <input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-GPoutput" style="width: 120px;"><i class="fa fa-arrow-left"></i> <span data-i18n="wamp.label.GPoutput"> Output: </span></label>
+		<select type="text" id="node-input-GPoutput" style="width:70%;">
+            <option value="gpio1">Output 1</option>
+            <option value="gpio2">Output 2</option>
+			<option value="gpio3">Output 3</option>
+			<option value="gpio4">Output 4</option>
+			<option value="gpio5">Output 5</option>
+			<option value="gpio6">Output 6</option>
+			<option value="relay1">Relay 1</option>
+			<option value="relay2">Relay 2</option>
+			<option value="relay3">Relay 3</option>
+			<option value="relay4">Relay 4</option>
+			<option value="relay5">Relay 5</option>
+			<option value="relay6">Relay 6</option>
+			<option value="relay7">Relay 7</option>
+			<option value="relay8">Relay 8</option>
+			<option value="e_relay1">External Relay 1</option>
+			<option value="e_relay2">External Relay 2</option>
+			<option value="e_relay3">External Relay 3</option>
+			<option value="e_relay4">External Relay 4</option>
+			<option value="e_relay5">External Relay 5</option>
+			<option value="e_relay6">External Relay 6</option>
+			<option value="e_relay7">External Relay 7</option>
+			<option value="e_relay8">External Relay 8</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-GPaction" style="width: 120px;"><i class="fa fa-sliders"></i> <span data-i18n="wamp.label.GPaction"> Action: </span></label>
+		<select type="text" id="node-input-GPaction" style="width:70%;">
+            <option value="set">Set (On)</option>
+            <option value="clear">Clear (Off)</option>
+			<option value="set_timed">Set Timed</option>
+            <option value="slow_blink">Slow Blink</option>
+			<option value="fast_blink">Fast Blink</option>
+            <option value="on" hidden>Legacy On</option>
+            <option value="off" hidden>Legacy Off</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-ontime" style="width: 120px;"><i class="fa fa-hourglass-half"></i> <span data-i18n="wamp.label.ontime"> On Time: </span></label>
+        <input type="text" id="node-input-ontime" data-i18n="[placeholder]On Time">
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel GPO Trigger">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute a trigger a GPO action.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The properties are as follows:
+   <ul>
+   <li><code>Dirno:</code> is a string to define the station where the GPO trigger action is to be triggered.</li>
+   <li><code>Output:</code> is a string to define which output is to be triggered.</li>
+   <li><code>Action:</code> is a string to define what action is to be triggered.</li>
+   <li><code>On Time:</code> is a integer to define the time when using the Timed On action.</li>
+   </ul>
+   </p>
+   <p>If the node is used with the <code>msg.payload</code> it must be a JSON object with the following items to complete the properties in the properties window:
+   <ul>
+   <li><code>dirno:</code> is a string to define the station where the GPO trigger action is to be triggered. This must be present if the Dirno: field is left empty.</li>
+   <li><code>id:</code> is a string to define which output is to be triggered. This must be present if the Output: field is left empty.</li>
+   <li><code>operation:</code> is a string to define what action is to be triggered. This must be present if the Action: field is left empty.</li>
+   <li><code>time:</code> is a integer to define the time when using the Timed On action is used. This must be present if the On Time: field is left empty.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    function zenitelGpoOnTimeIsValid(value) {
+        var str = (value === undefined || value === null) ? "" : ("" + value).trim();
+        if (str === "") {
+            return true;
+        }
+        if (!/^\d+$/.test(str)) {
+            return false;
+        }
+        return parseInt(str, 10) > 0;
+    }
+
+    function zenitelGpoAttachOnTimeWarning(node) {
+        zenitelGpoDetachOnTimeWarning(node);
+
+        var $onTime = $("#node-input-ontime");
+        if (!$onTime.length) {
+            return;
+        }
+
+        function closeWarning() {
+            if (node.__gpoOnTimeWarning) {
+                node.__gpoOnTimeWarning.close();
+                node.__gpoOnTimeWarning = null;
+            }
+        }
+
+        function ensureWarning() {
+            if (!node.__gpoOnTimeWarning) {
+                node.__gpoOnTimeWarning = RED.notify("On Time must be a positive whole number.", {
+                    type: "warning",
+                    timeout: 0
+                });
+            }
+        }
+
+        function handleOnTimeInput() {
+            if (zenitelGpoOnTimeIsValid($onTime.val())) {
+                closeWarning();
+            } else {
+                ensureWarning();
+            }
+        }
+
+        node.__gpoOnTimeWarningCleanup = function () {
+            $onTime.off(".zenitelGpoOnTime");
+            closeWarning();
+        };
+
+        $onTime.on("input.zenitelGpoOnTime change.zenitelGpoOnTime", handleOnTimeInput);
+        handleOnTimeInput();
+    }
+
+    function zenitelGpoDetachOnTimeWarning(node) {
+        if (node && typeof node.__gpoOnTimeWarningCleanup === "function") {
+            node.__gpoOnTimeWarningCleanup();
+            node.__gpoOnTimeWarningCleanup = null;
+        }
+        if (node && node.__gpoOnTimeWarning) {
+            node.__gpoOnTimeWarning.close();
+            node.__gpoOnTimeWarning = null;
+        }
+    }
+
+    RED.nodes.registerType('Zenitel GPO Trigger', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Actions',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+			dirno: {value:"", validate: zenitelDirnoIsValid},
+			GPoutput: {value:""},
+			GPaction: {value:""},
+			ontime: {
+                value:"",
+                validate: zenitelGpoOnTimeIsValid
+            },
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "right",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel GPO Trigger");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        },
+        oneditprepare: function () {
+            zenitelGpoAttachOnTimeWarning(this);
+        },
+        oneditsave: function () {
+            zenitelGpoDetachOnTimeWarning(this);
+        },
+        oneditcancel: function () {
+            zenitelGpoDetachOnTimeWarning(this);
+        },
+        oneditdelete: function () {
+            zenitelGpoDetachOnTimeWarning(this);
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|5| Node for simulate a key press on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Key Press">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+   	<div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+        <input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-buttonkey" style="width: 120px;"><i class="fa fa-bullseye"></i> <span data-i18n="wamp.label.buttonkey"> Button: </span></label>
+		<select type="text" id="node-input-buttonkey" style="width:70%;">
+            <option value="m">M-key</option>
+            <option value="c">C-Key</option>
+			<option value="p1">DAK 1</option>
+            <option value="p2">DAK 2</option>
+			<option value="p3">DAK 3</option>
+			<option value="p4">DAK 4</option>
+            <option value="p5">DAK 5</option>
+			<option value="p6">DAK 6</option>
+			<option value="p7">DAK 7</option>
+			<option value="p8">DAK 8</option>
+			<option value="p9">DAK 9</option>
+			<option value="p10">DAK 10</option>
+			<option value="e1-p1"> Extention module 1 DAK 1</option>
+			<option value="e1-p2"> Extention module 1 DAK 2</option>
+			<option value="e1-p3"> Extention module 1 DAK 3</option>
+			<option value="e1-p4"> Extention module 1 DAK 4</option>
+      <option value="e1-p5"> Extention module 1 DAK 5</option>
+			<option value="e1-p6"> Extention module 1 DAK 6</option>
+			<option value="e1-p7"> Extention module 1 DAK 7</option>
+			<option value="e1-p8"> Extention module 1 DAK 8</option>
+      <option value="e1-p9"> Extention module 1 DAK 9</option>
+			<option value="e1-p10"> Extention module 1 DAK 10</option>
+			<option value="e1-p11"> Extention module 1 DAK 11</option>
+			<option value="e1-p12"> Extention module 1 DAK 12</option>
+			<option value="e1-p13"> Extention module 1 DAK 13</option>
+			<option value="e1-p14"> Extention module 1 DAK 14</option>
+			<option value="e1-p15"> Extention module 1 DAK 15</option>
+			<option value="e1-p16"> Extention module 1 DAK 16</option>
+      <option value="e1-p17"> Extention module 1 DAK 17</option>
+			<option value="e1-p18"> Extention module 1 DAK 18</option>
+			<option value="e1-p19"> Extention module 1 DAK 19</option>
+			<option value="e1-p20"> Extention module 1 DAK 20</option>
+      <option value="e1-p21"> Extention module 1 DAK 21</option>
+			<option value="e1-p22"> Extention module 1 DAK 22</option>
+			<option value="e1-p23"> Extention module 1 DAK 23</option>
+			<option value="e1-p24"> Extention module 1 DAK 24</option>
+			<option value="e1-p25"> Extention module 1 DAK 25</option>
+			<option value="e1-p26"> Extention module 1 DAK 26</option>
+			<option value="e1-p27"> Extention module 1 DAK 27</option>
+			<option value="e1-p28"> Extention module 1 DAK 28</option>
+      <option value="e1-p29"> Extention module 1 DAK 29</option>
+			<option value="e1-p30"> Extention module 1 DAK 30</option>
+			<option value="e1-p31"> Extention module 1 DAK 31</option>
+			<option value="e1-p32"> Extention module 1 DAK 32</option>
+      <option value="e1-p33"> Extention module 1 DAK 33</option>
+			<option value="e1-p34"> Extention module 1 DAK 34</option>
+			<option value="e1-p35"> Extention module 1 DAK 35</option>
+			<option value="e1-p36"> Extention module 1 DAK 36</option>
+			<option value="e1-p37"> Extention module 1 DAK 37</option>
+			<option value="e1-p38"> Extention module 1 DAK 38</option>
+			<option value="e1-p39"> Extention module 1 DAK 39</option>
+			<option value="e1-p40"> Extention module 1 DAK 40</option>
+      <option value="e1-p41"> Extention module 1 DAK 41</option>
+			<option value="e1-p42"> Extention module 1 DAK 42</option>
+			<option value="e1-p43"> Extention module 1 DAK 43</option>
+			<option value="e1-p44"> Extention module 1 DAK 44</option>
+      <option value="e1-p45"> Extention module 1 DAK 45</option>
+			<option value="e1-p46"> Extention module 1 DAK 46</option>
+			<option value="e1-p47"> Extention module 1 DAK 47</option>
+			<option value="e1-p48"> Extention module 1 DAK 48</option>
+			<option value="e2-p1"> Extention module 2 DAK 1</option>
+			<option value="e2-p2"> Extention module 2 DAK 2</option>
+			<option value="e2-p3"> Extention module 2 DAK 3</option>
+			<option value="e2-p4"> Extention module 2 DAK 4</option>
+      <option value="e2-p5"> Extention module 2 DAK 5</option>
+			<option value="e2-p6"> Extention module 2 DAK 6</option>
+			<option value="e2-p7"> Extention module 2 DAK 7</option>
+			<option value="e2-p8"> Extention module 2 DAK 8</option>
+      <option value="e2-p9"> Extention module 2 DAK 9</option>
+			<option value="e2-p10"> Extention module 2 DAK 10</option>
+			<option value="e2-p11"> Extention module 2 DAK 11</option>
+			<option value="e2-p12"> Extention module 2 DAK 12</option>
+			<option value="e2-p13"> Extention module 2 DAK 13</option>
+			<option value="e2-p14"> Extention module 2 DAK 14</option>
+			<option value="e2-p15"> Extention module 2 DAK 15</option>
+			<option value="e2-p16"> Extention module 2 DAK 16</option>
+      <option value="e2-p17"> Extention module 2 DAK 17</option>
+			<option value="e2-p18"> Extention module 2 DAK 18</option>
+			<option value="e2-p19"> Extention module 2 DAK 19</option>
+			<option value="e2-p20"> Extention module 2 DAK 20</option>
+      <option value="e2-p21"> Extention module 2 DAK 21</option>
+			<option value="e2-p22"> Extention module 2 DAK 22</option>
+			<option value="e2-p23"> Extention module 2 DAK 23</option>
+			<option value="e2-p24"> Extention module 2 DAK 24</option>
+			<option value="e2-p25"> Extention module 2 DAK 25</option>
+			<option value="e2-p26"> Extention module 2 DAK 26</option>
+			<option value="e2-p27"> Extention module 2 DAK 27</option>
+			<option value="e2-p28"> Extention module 2 DAK 28</option>
+      <option value="e2-p29"> Extention module 2 DAK 29</option>
+			<option value="e2-p30"> Extention module 2 DAK 30</option>
+			<option value="e2-p31"> Extention module 2 DAK 31</option>
+			<option value="e2-p32"> Extention module 2 DAK 32</option>
+      <option value="e2-p33"> Extention module 2 DAK 33</option>
+			<option value="e2-p34"> Extention module 2 DAK 34</option>
+			<option value="e2-p35"> Extention module 2 DAK 35</option>
+			<option value="e2-p36"> Extention module 2 DAK 36</option>
+			<option value="e2-p37"> Extention module 2 DAK 37</option>
+			<option value="e2-p38"> Extention module 2 DAK 38</option>
+			<option value="e2-p39"> Extention module 2 DAK 39</option>
+			<option value="e2-p40"> Extention module 2 DAK 40</option>
+      <option value="e2-p41"> Extention module 2 DAK 41</option>
+			<option value="e2-p42"> Extention module 2 DAK 42</option>
+			<option value="e2-p43"> Extention module 2 DAK 43</option>
+			<option value="e2-p44"> Extention module 2 DAK 44</option>
+      <option value="e2-p45"> Extention module 2 DAK 45</option>
+			<option value="e2-p46"> Extention module 2 DAK 46</option>
+			<option value="e2-p47"> Extention module 2 DAK 47</option>
+			<option value="e2-p48"> Extention module 2 DAK 48</option>
+			</select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-action" style="width: 120px;"><i class="fa fa-sliders"></i> <span data-i18n="wamp.label.action"> Action: </span></label>
+		<select type="text" id="node-input-action" style="width:70%;">
+            <option value="press">Press</option>
+            <option value="release">Release</option>
+			<option value="tap">Tap</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Key Press">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute a trigger a button press action.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The properties are as follows:
+   <ul>
+   <li><code>Dirno:</code> is a string to define the station where the button press action is to be triggered.</li>
+   <li><code>Button:</code> is a string to define which button is to be triggered.</li>
+   <li><code>Action:</code> is a string to define what action is to be triggered.</li>
+   </ul>
+   </p>
+   <p>If the node is used with the <code>msg.payload</code> it must be a JSON object with the following items to complete the properties in the properties window:
+   <ul>
+   <li><code>dirno:</code> is a string to define the station where the button press trigger action is to be triggered. This must be present if the Dirno: field is left empty.</li>
+   <li><code>id:</code> is a string to define which button is to be triggered. This must be present if the Output: field is left empty.</li>
+   <li><code>operation:</code> is a string to define what action is to be triggered. This must be present if the Action: field is left empty.</li>
+   </ul>
+   </p>
+   <p> Only the M-key needs both a press and release action as it is a toggle button. All other buttons are momentary and only require a press action.</p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Key Press', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Actions',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+			dirno: {value:"", validate: zenitelDirnoIsValid},
+			buttonkey: {value:""},
+			action: {value:""},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "right",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Key Press");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|6| Node for setting call forwarding on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Setup Call Forwarding">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+   	<div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+        <input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-fwddirno" style="width: 120px;"><i class="fa fa-mail-forward"></i> <span data-i18n="wamp.label.fwddirno"> Forward To: </span></label>
+        <input type="text" id="node-input-fwddirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-rule" style="width: 120px;"><i class="fa fa-sliders"></i> <span data-i18n="wamp.label.rule"> Rule: </span></label>
+		<select type="text" id="node-input-rule" style="width:70%;">
+            <option value="unconditional">Unconditional</option>
+            <option value="on_busy">Busy</option>
+			<option value="on_timeout">Time out</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-enable" style="width: 120px;"><i class="fa fa-sliders"></i> <span data-i18n="wamp.label.enable"> Enable: </span></label>
+		<select type="text" id="node-input-enable" style="width:70%;">
+            <option value="enable">Enable</option>
+            <option value="disable">Disable</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Setup Call Forwarding">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute a setup of a call forwarding rule.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The properties are as follows:
+   <ul>
+   <li><code>Dirno:</code> is a string to define the station where the call forwarding rule has to be setup.</li>
+   <li><code>Forward To:</code> is a string to define where the calls should be forwarded.</li>
+   <li><code>Rule:</code> is a string to define what type of rule has to be setup.</li>
+   <li><code>Enable:</code> is a boolean to enable or disable the rule.</li>
+   </ul>
+   </p>
+   <p>If the node is used with the <code>msg.payload</code> it must be a JSON object with the following items to complete the properties in the properties window:
+   <ul>
+   <li><code>dirno:</code> is a string to define the station where the call forwarding rule has to be setup. This must be present if the Dirno: field is left empty.</li>
+   <li><code>fwd_to:</code> is a string to define where the calls should be forwarded. This must be present if the Forward To: field is left empty.</li>
+   <li><code>fwd_type:</code> is a string to define what type of rule has to be setup. This must be present if the Rule: field is left empty.</li>
+   <li><code>enabled:</code> is a boolean to enable or disable the rule. This must be present if the Enable: field is left empty.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Setup Call Forwarding', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Actions',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+			dirno: {value:"", validate: zenitelDirnoIsValid},
+			fwddirno: {value:"", validate: zenitelDirnoIsValid},
+			rule: {value:""},
+			enable: {value:""},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "right",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Setup Call Forwarding");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|7| Node for executing a button test on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Button Test">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+   	<div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+        <input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Button Test">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute a button test action.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The properties are as follows:
+   <ul>
+   <li><code>Dirno:</code> is a string to define the station where the button test is to be triggered.</li>
+   </ul>
+   </p>
+   <p>If the node is used with the <code>msg.payload</code> it must be a JSON object with the following items to complete the properties in the properties window:
+   <ul>
+   <li><code>from_dirno</code> is a string to define the station where the button test is to be triggered. This must be present if the Dirno: field is left empty.</li>
+   </ul>
+   </p>
+   <p>For reading the test results you need a subscription to the extended status of the device.</p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Button Test', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Actions',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+			dirno: {value:"", validate: zenitelDirnoIsValid},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "right",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Button Test");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|8| Node for executing a tone test on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Tone Test">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+   	<div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+        <input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Tone Test">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute a tone test action.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The properties are as follows:
+   <ul>
+   <li><code>Dirno:</code> is a string to define the station where the tone test is to be triggered.</li>
+   </ul>
+   </p>
+   <p>If the node is used with the <code>msg.payload</code> it must be a JSON object with the following items to complete the properties in the properties window:
+   <ul>
+   <li><code>from_dirno</code> is a string to define the station where the tone test is to be triggered. This must be present if the Dirno: field is left empty.</li>
+   </ul>
+   </p>
+   <p>For reading the test results you need a subscription to the extended status of the device.</p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Tone Test', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Actions',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+			dirno: {value:"", validate: zenitelDirnoIsValid},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "right",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Tone Test");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|9| Generic Zenitel WAMP call node	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel WAMP Out">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-procedure" style="width: 120px;"><i class="fa fa-envelope"></i> <span data-i18n="wamp.label.procedure"> Action: </span></label>
+		<select type="text" id="node-input-procedure" style="width:70%;">
+		    <option value="com.zenitel.system.audio_messages.post">Audio Messages</option>
+            <option value="com.zenitel.call_forwarding.post">Call Forwarding</option>
+            <option value="com.zenitel.calls.post">Calls</option>
+			<option value="com.zenitel.calls.call.open_door.post">Door Open</option>
+			<option value="com.zenitel.devices.device.gpos.gpo.post">General Purpose Output</option>
+			<option value="com.zenitel.devices.device.key.post">Key Press</option>
+			<option value="com.zenitel.system.devices.test.tone.post">Tone Test</option>
+			<option value="com.zenitel.system.devices.test.tone.post">Button Test</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel WAMP Out">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute actions chosen from the dropdown menu.</p>
+   <p>The node needs a <code>msg.payload</code> that contains a JSON object with the information needed for the Action. To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel WAMP Out',{
+        category: 'Zenitel Actions',      // the palette category
         defaults: {             // defines the editable properties of the node
             router: {type: "wamp-client", required: true},
             procedure: {value:"", required: true},
             name: {value:""}
         },
-        color:"#79d8bf",
+        color:"#ffd400",
         inputs:1,
         outputs:1,
-        icon: "arrow-in.png",
+        icon: "ZenLogo.png",
         align: "right",
         label: function() {
             var wampNode = RED.nodes.node(this.router);
-            return this.name || this.procedure || (wampNode ? wampNode.label() : this._("wamp.label.wamp"));
+            return this.name || this._("Zenitel WAMP Out");
         },
         labelStyle: function() { // sets the class to apply to the label
             return this.name?"node_label_italic":"";
         }
     });
 </script>
-
-
-
-	
-<script type="text/x-red" data-template-name="wamp subs">
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|10| Node for directly ending calls on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Call End">
     <div class="form-row node-input-router">
-        <label for="node-input-router" style="width: 110px;"><i class="fa fa-bookmark"></i> <span data-i18n="wamp.label.router"></span></label>
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
         <input type="text" id="node-input-router">
     </div>
     <div class="form-row">
-        <label for="node-input-procedure" style="width: 110px;"><i class="fa fa-envelope"></i> <span data-i18n="wamp.label.procedure"></span></label>
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+        <input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Call End">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute a to trigger end an ongoing call on a device.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The properties are as follows:
+   <ul>
+   <li><code>Dirno:</code> is a string to define the directory number where the call must be ended.</li>
+   </ul>
+   </p>
+   <p>If the node is used with the <code>msg.payload</code> it must be a JSON object with the following items to complete the properties in the properties window:
+   <ul>
+   <li><code>dirno</code> is a string to define the directory number where the call must be ended. This must be present if the Dirno: field is left empty.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Call End', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Actions',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            dirno: {value:"", validate: zenitelDirnoIsValid},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "right",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Call End");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|11| Node for directly ending audio message	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Audio Message End">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-file-audio-o"></i> <span data-i18n="wamp.label.dirno"> Audio message: </span></label>
+        <input type="text" id="node-input-dirno" data-i18n="[placeholder]Audiomessage">
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Audio Message End">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute a to trigger end an ongoing audio message.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The properties are as follows:
+   <ul>
+   <li><code>Audio message:</code> is a string to define the audio message that must be ended.</li>
+   </ul>
+   </p>
+   <p>If the node is used with the <code>msg.payload</code> it must be a JSON object with the following items to complete the properties in the properties window:
+   <ul>
+   <li><code>dirno</code> is a string to define the audio message that must be ended. This must be present if the Audio message: field is left empty.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Audio Message End', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Actions',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            dirno: {value:"", validate: zenitelDirnoIsValid},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "right",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Audio Message End");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|12| Node for deleting call forwarding rules on a Zenitel intercom device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Delete Call Forwarding">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+   	<div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+        <input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-fwd_type" style="width: 120px;"><i class="fa fa-sliders"></i> <span data-i18n="wamp.label.fwd_type"> Rule: </span></label>
+		<select type="text" id="node-input-fwd_type" style="width:70%;">
+             <option value="all">All</option>
+            <option value="unconditional">Unconditional</option>
+            <option value="on_busy">Busy</option>
+			<option value="on_timeout">Time out</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Delete Call Forwarding">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute a deleting of a call forwarding rule.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The properties are as follows:
+   <ul>
+   <li><code>Dirno:</code> is a string to define the station where the call forwarding rule has to be deleted.</li>
+   <li><code>Rule:</code> is a string to define what type of rule has to be deleted.</li>
+   </ul>
+   </p>
+   <p>If the node is used with the <code>msg.payload</code> it must be a JSON object with the following items to complete the properties in the properties window:
+   <ul>
+   <li><code>dirno:</code> is a string to define the station where the call forwarding rule has to be deleted. This must be present if the Dirno: field is left empty.</li>
+   <li><code>fwd_type:</code> is a string to define what type of rule has to be deleted. This must be present if the Rule: field is left empty.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Delete Call Forwarding', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Actions',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+			dirno: {value:"", validate: zenitelDirnoIsValid},
+			fwd_type: {value:"all"},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "right",
+        oneditprepare: function() {
+            var currentType = this.fwd_type || this.rule || "all";
+            $("#node-input-fwd_type").val(currentType);
+        },
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Delete Call Forwarding");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Request|1| Node for requesting device accounts	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Device Account Request">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+	<div class="form-row">
+        <label for="node-input-state" style="width: 120px;"><i class="fa fa-sort-numeric-asc"></i> <span data-i18n="wamp.label.state"> State: </span></label>
+        <select type="text" id="node-input-state" style="width:70%;">
+		    <option value="">All</option>
+            <option value="provisioned">Provisioned</option>
+            <option value="registered">Registered</option>
+			<option value="reachable">Reachable</option>
+			<option value="unreachable">Unreachable</option>
+			<option value="unknown">Unknown</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Device Account Rquest">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can request current device accounts information.</p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>State:</code> which is to filter on specific states of the devices.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>.<code>msg.payload</code> contains args, which is an array, which is a list of all devices, containing the following information:
+   <ul>
+   <li><code>dirno</code> which is the directory number of the station.</li>
+   <li><code>name</code> which is the name of the device.</li>
+   <li><code>device_ip</code> which is the IP address of the device.</li>
+   <li><code>device_type</code> which is the type of the device.</li>
+   <li><code>state</code> which is the current state of the device.</li>
+   <li><code>wamp_status</code> which is the current WAMP state of the device.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Device Account Request',{
+        category: 'Zenitel Requests',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            state: {value:""},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "left",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Device Account Request");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    });
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Request|2| Node for requesting audio messages	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Audio Message Request">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Audio Message Request">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can request current configured audio messages.</p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>dirno</code> which is the directory number of the audio message.</li>
+   <li><code>filename</code> which is filename of the audio message.</li>
+   <li><code>filepath</code> directory path of the audio message.</li>
+   <li><code>filesize</code> which is the size of the audio message in bytes.</li>
+   <li><code>duration</code> which is the duration of the audio message in seconds.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Audio Message Request',{
+        category: 'Zenitel Requests',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "left",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Audio Message Request");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    });
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Request|3| Node for requesting groups	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Groups Request">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-groupdirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.groupdirno"> Group Dirno: </span></label>
+        <input type="text" id="node-input-groupdirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-verbose" style="width: 120px;"><i class="fa fa-user-circle"></i> <span data-i18n="wamp.label.verbose"> Incl. Members: </span></label>
+        <select type="text" id="node-input-verbose" style="width:70%;">
+		    <option value="true">Yes</option>
+            <option value="false">No</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Groups Request">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can request current configured groups.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>Group Dirno:</code> which is to filter on a specific group.</li>
+   <li><code>Include Members:</code> which is to include a list of the group members.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>dirno</code> which is the directory number of the group.</li>
+   <li><code>displayname</code> which is display name of the group.</li>
+   <li><code>priority</code> which is the call priority of the group.</li>
+   <li><code>call_timeout</code> which is the call timeout of the group.</li>
+   <li><code>members</code> which is an array of all the directory numbers that are members in the group.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Groups Request', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Requests',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            groupdirno: {value:"", validate: zenitelDirnoIsValid},
+			verbose: {value:""},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "left",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Groups Request");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Request|4| Node for requesting the directory	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Directory Request">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+        <input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Directory Request">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can request the current directory configuration.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>Dirno:</code> which is to filter on a specific directory number.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>dirno</code> which is the directory number of the entry.</li>
+   <li><code>displayname</code> which is the display name of the entry.</li>
+   <li><code>feature_type</code> which is the type of the entry.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Directory Request', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Requests',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            dirno: {value:"", validate: zenitelDirnoIsValid},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "left",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Directory Request");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Request|5| Node for requesting call forwarding rules	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Call Forwarding Request">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.dirno"> Dirno: </span></label>
+        <input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-fwd_type" style="width: 120px;"><i class="fa fa-volume-control-phone"></i> <span data-i18n="wamp.label.fwd_type"> Rule Type: </span></label>
+		<select type="text" id="node-input-fwd_type" style="width:70%;">
+            <option value="">All</option>
+            <option value="unconditional">Unconditional</option>
+            <option value="on_timeout">On Timeout</option>
+            <option value="on_busy">On Busy</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Call Forwarding Request">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can request the current forwarding rules.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>Dirno:</code> which is to filter on forwarding rules for a specific device.</li>
+   <li><code>Rule Type:</code> which is to filter on a specific rule set.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>dirno</code> which is the directory number of the station the rules is for.</li>
+   <li><code>fwd_type</code> which is the forwarding rule.</li>
+   <li><code>fwd_to</code> which is the directory number where to forward to.</li>
+   <li><code>enabled</code> which shows if the rule is active or not.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Call Forwarding Request', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Requests',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            dirno: {value:"", validate: zenitelDirnoIsValid},
+			fwd_type: {value:""},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "left",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Call Forwarding Request");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Request|6| Node for requesting current calls	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Current Calls">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-fromdirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.fromdirno"> From Dirno: </span></label>
+        <input type="text" id="node-input-fromdirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-todirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.todirno"> To Dirno: </span></label>
+        <input type="text" id="node-input-todirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-state" style="width: 120px;"><i class="fa fa-volume-control-phone"></i> <span data-i18n="wamp.label.state"> State: </span></label>
+        <select type="text" id="node-input-state" style="width:70%;">
+            <option value="">All</option>
+		    <option value="queued">Queued</option>
+            <option value="ringing">Ringing</option>
+            <option value="in_call">In call</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-verbose" style="width: 120px;"><i class="fa fa-sliders"></i> <span data-i18n="wamp.label.verbose"> Incl. Call Legs: </span></label>
+        <select type="text" id="node-input-verbose" style="width:70%;">
+		    <option value="true">Yes</option>
+            <option value="false">No</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Current Calls">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can request the current ongoing calls.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>Dirno:</code> which is to filter on events from a specific device.</li>
+   <li><code>Input:</code> which is to filter on a specific input.</li>
+   <li><code>State:</code> which is to filter on a specific state of the input.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>dirno</code> which is the directory number of the station the GPI event was triggered on.</li>
+   <li><code>gpis</code> which is a mapping of all the current states of the GPI on the device.</li>
+   <li><code>id</code> which is the identification of the GPI that has changed state.</li>
+   <li><code>state</code> which is the new state of the GPI that has changed state.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Current Calls', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Requests',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            fromdirno: {value:"", validate: zenitelDirnoIsValid},
+            todirno: {value:"", validate: zenitelDirnoIsValid},
+            state: {value:""},
+            verbose: {value:"true"},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "left",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Current Calls");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Request|7| Node for requesting current call queues	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Current Call Queues">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-queue_dirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.queue_dirno"> Queue Dirno: </span></label>
+        <input type="text" id="node-input-queue_dirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Current Call Queues">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and request the current states of the call queues.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The fields in the properties window can be used for directly filtering the message.
+   <ul>
+   <li><code>Dirno:</code> which is to filter on a specific call queue.</li>
+   </ul>
+   If the fields are left empty or default there is no filtering on that property.
+   </p>
+   <p>The node outputs an object called <code>msg</code> containing <code>msg.topic</code> and
+   <code>msg.payload</code>. <code>msg.payload</code> contains args, which is an array containing the following information:
+   <ul>
+   <li><code>dirno</code> which is the directory number of the station the GPI event was triggered on.</li>
+   <li><code>gpis</code> which is a mapping of all the current states of the GPI on the device.</li>
+   <li><code>id</code> which is the identification of the GPI that has changed state.</li>
+   <li><code>state</code> which is the new state of the GPI that has changed state.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel Current Call Queues', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Requests',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            queue_dirno: {value:"", validate: zenitelDirnoIsValid},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "left",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Current Call Queues");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Request|8| Node for requesting current GPO state	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel GPO Request">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-device_id" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.device_id"> Dirno: </span></label>
+        <input type="text" id="node-input-device_id" data-i18n="[placeholder]Dirno">
+	</div>
+	<div class="form-row">
+        <label for="node-input-gpo_id" style="width: 120px;"><i class="fa fa-arrow-left"></i> <span data-i18n="wamp.label.id"> Output: </span></label>
+        <select type="text" id="node-input-gpo_id" style="width:70%;">
+            <option value="">All</option>
+            <option value="gpio1">Output 1</option>
+			<option value="gpio2">Output 2</option>
+			<option value="gpio3">Output 3</option>
+			<option value="gpio4">Output 4</option>
+			<option value="gpio5">Output 5</option>
+			<option value="gpio6">Output 6</option>
+			<option value="relay1">Relay 1</option>
+			<option value="relay2">Relay 2</option>
+			<option value="relay3">Relay 3</option>
+			<option value="relay4">Relay 4</option>
+			<option value="relay5">Relay 5</option>
+			<option value="relay6">Relay 6</option>
+			<option value="relay7">Relay 7</option>
+			<option value="relay8">Relay 8</option>
+			<option value="e_relay1">External Relay 1</option>
+			<option value="e_relay2">External Relay 2</option>
+			<option value="e_relay3">External Relay 3</option>
+			<option value="e_relay4">External Relay 4</option>
+			<option value="e_relay5">External Relay 5</option>
+			<option value="e_relay6">External Relay 6</option>
+			<option value="e_relay7">External Relay 7</option>
+			<option value="e_relay8">External Relay 8</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel GPO Request">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can request the current state of the GPO.</p>
+   <p>The properties window lets you set <code>Dirno</code> (sent as <code>dirno</code>) and an optional <code>Output</code> (sent as <code>id</code>). Leave Output empty to request all outputs on the device.</p>
+   <p>You can also provide the same values via <code>msg.payload.dirno</code> (legacy <code>msg.payload.device_id</code> is accepted) and <code>msg.payload.id</code> (legacy <code>msg.payload.gpo_id</code> is accepted).</p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel GPO Request', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Requests',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            device_id: {value:"", required: true, validate: zenitelDirnoIsValid},
+			gpo_id: {value:""},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "left",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel GPO Request");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Request|9| Node for requesting current GPI state	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel GPI Request">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-device_id" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.device_id"> Dirno: </span></label>
+        <input type="text" id="node-input-device_id" data-i18n="[placeholder]Dirno">
+	</div>
+	<div class="form-row">
+        <label for="node-input-gpi_id" style="width: 120px;"><i class="fa fa-arrow-left"></i> <span data-i18n="wamp.label.id"> Output: </span></label>
+        <select type="text" id="node-input-gpi_id" style="width:70%;">
+            <option value="">All</option>
+            <option value="gpio1">Input 1</option>
+			<option value="gpio2">Input 2</option>
+			<option value="gpio3">Input 3</option>
+			<option value="gpio4">Input 4</option>
+			<option value="gpio5">Input 5</option>
+			<option value="gpio6">Input 6</option>
+			<option value="e_gpio1">External Input 1</option>
+			<option value="e_gpio2">External Input 2</option>
+			<option value="e_gpio3">External Input 3</option>
+			<option value="e_gpio4">External Input 4</option>
+			<option value="e_gpio5">External Input 5</option>
+			<option value="e_gpio6">External Input 6</option>
+			<option value="e_gpio7">External Input 7</option>
+			<option value="e_gpio8">External Input 8</option>
+        </select>
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel GPi Request">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can request the current state of the GPI.</p>
+   <p>The properties window lets you set <code>Dirno</code> (sent as <code>dirno</code>) and an optional <code>Output</code> (sent as <code>id</code>). Leave Output empty to request all inputs on the device.</p>
+   <p>You can also provide the same values via <code>msg.payload.dirno</code> (legacy <code>msg.payload.device_id</code> is accepted) and <code>msg.payload.id</code> (legacy <code>msg.payload.gpo_id</code> is accepted).</p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel GPI Request', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Requests',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            device_id: {value:"", required: true, validate: zenitelDirnoIsValid},
+			gpi_id: {value:""},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "left",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel GPI Request");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Request|10| Generic Zenitel WAMP request node	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel WAMP Request">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-procedure" style="width: 120px;"><i class="fa fa-envelope"></i> <span data-i18n="wamp.label.procedure"> Request: </span></label>
+		<select type="text" id="node-input-procedure" style="width:70%;">
+		    <option value="com.zenitel.system.device_accounts">Device Accounts</option>
+            <option value="com.zenitel.system.info.net_interfaces">Network interfaces</option>
+            <option value="com.zenitel.system.audio_messages">Audio Messages</option>
+			<option value="com.zenitel.groups">Groups</option>
+			<option value="com.zenitel.directory">Directory</option>
+			<option value="com.zenitel.call_forwarding">Call Forwarding</option>
+			<option value="com.zenitel.calls">Calls</option>
+			<option value="com.zenitel.call_legs">Call Legs</option>
+			<option value="com.zenitel.call_queues">Call Queues</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel WAMP Request">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can request data chosen from the dropdown menu.</p>
+   <p>The node returns a <code>msg.payload</code> that contains a JSON object with the information requested. To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Zenitel WAMP Request',{
+        category: 'Zenitel Requests',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            procedure: {value:"", required: true},
+            name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "left",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel WAMP Request");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        }
+    });
+</script>
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Old node	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->	
+<script type="text/x-red" data-template-name="wamp subs">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-bookmark"></i> <span data-i18n="wamp.label.router"></span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-procedure" style="width: 120px;"><i class="fa fa-envelope"></i> <span data-i18n="wamp.label.procedure"></span></label>
         <input type="text" id="node-input-procedure" data-i18n="[placeholder]wamp.placeholder.procedure">
     </div>
     <div class="form-row">
-        <label for="node-input-name" style="width: 110px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
         <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
     </div>
 
@@ -175,16 +2564,16 @@
 
 <script type="text/javascript">
     RED.nodes.registerType('wamp subs',{
-        category: 'function',      // the palette category
+        category: 'Zenitel',      // the palette category
         defaults: {             // defines the editable properties of the node
             router: {type: "wamp-client", required: true},
             procedure: {value:"", required: true},
             name: {value:""}
         },
-        color:"#79d8bf",
+        color:"#ffd400",
         inputs:1,
         outputs:1,
-        icon: "arrow-in.png",
+        icon: "ZenLogo.png",
         align: "right",
         label: function() {
             var wampNode = RED.nodes.node(this.router);
@@ -196,32 +2585,24 @@
     });
 </script>
 
-
-
-
-
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Client config Node for WAMP client config	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->	
 <script type="text/x-red" data-template-name="wamp-client">
     <div class="form-row node-input-router">
-        <label for="node-config-input-address"><i class="fa fa-bookmark"></i> <span
-                data-i18n="wamp.label.router"></span></label>
-        <input type="text" id="node-config-input-address" data-i18n="[placeholder]wamp.placeholder.router"
-               style="width: 45%;">
+        <label for="node-config-input-ip" style="margin-left: 15px; width: 200px;"><i class="fa fa-globe"></i> Zenitel Connect Pro IP: </label>
+        <input type="text" id="node-config-input-ip" placeholder="192.168.1.42" style="width: 45%;">
         <br>
-        <label for="node-config-input-realm" style="margin-left: 15px; width: 85px; "> <span
-                data-i18n="wamp.label.realm"></span></label>
-        <input type="text" id="node-config-input-realm" data-i18n="[placeholder]wamp.placeholder.realm"
-               style="width: 45%;">
+        <label for="node-config-input-port" style="margin-left: 15px; width: 200px;"><i class="fa fa-globe"></i> WAMP Port: </label>
+        <input type="text" id="node-config-input-port" placeholder="8086" style="width: 45%;">
         <br>
-        <label for="node-config-input-authId" style="margin-left: 15px; width: 85px; "> <span
-                data-i18n="wamp.label.authId"></span></label>
-        <input type="text" id="node-config-input-authId" data-i18n="[placeholder]wamp.placeholder.authId"
-               style="width: 45%;">
+        <label for="node-config-input-authId" style="margin-left: 15px; width: 200px;"><i class="fa fa-id-badge"></i> <span data-i18n="wamp.label.authId"></span> Zenitel Link Username:</label>
+        <input type="text" id="node-config-input-authId" data-i18n="[placeholder]wamp.placeholder.authId" style="width: 45%;">
         <br>
-        <label for="node-config-input-password" style="margin-left: 15px; width: 85px; "> <span
-                data-i18n="wamp.label.password"></span></label>
-        <input type="password" id="node-config-input-password" data-i18n="[placeholder]wamp.placeholder.password"
-               style="width: 45%;">
+        <label for="node-config-input-password" style="margin-left: 15px; width: 200px;"><i class="fa fa-id-badge"></i> <span data-i18n="wamp.label.password"></span> Zenitel Link Password:</label>
+        <input type="password" id="node-config-input-password" data-i18n="[placeholder]wamp.placeholder.password" style="width: 45%;">
     </div>
+
     <div class="form-row">
         <label for="node-config-input-name"><i class="fa fa-tag"></i> <span
                 data-i18n="node-red:common.label.name"></span></label>
@@ -229,18 +2610,31 @@
     </div>
 </script>
 
+<script type="text/x-red" data-help-name="wamp-client">
+   <p>Client configuration for a connection to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP.</p>
+   
+   <p>The properties are as follows:
+   <ul>
+   <li><code>Zenitel Connect Pro IP Address:</code> is the IP address of the Zenitel Connect Pro server.</li>
+   <li><code>WAMP Port:</code> is the port number used for the WAMP connection.</li>
+   <li><code>Zenitel Link Username:</code> is the username for the Zenitel Link.</li>
+   <li><code>Zenitel Link Password:</code> is the password for the Zenitel Link.</li>   
+   </ul>
+   </p>
+</script>
+
 <script type="text/javascript">
-    RED.nodes.registerType('wamp-client',{
-        category: 'config',      // the palette category
-        defaults: {             // defines the editable properties of the node
-            address: {required: true},
-            realm: {required: true},
-            authId: {required: true},
-            password: {required: true},
-            name: {}
+    RED.nodes.registerType('wamp-client', {
+        category: 'config',   // the palette category
+        defaults: {           // defines the editable properties of the node
+            ip:      { value: "", required: true },
+            port:    { value: "", required: true },
+            authId:  { value: "", required: true },
+            password:{ value: "", required: true },
+            name:    { value: "" }
         },
-        label: function() {     // sets the default label contents
-            return (this.name?this.name:this.realm+"@"+this.address);
+        label: function() {   // sets the default label contents
+            return (this.name ? this.name : (this.ip + ":" + this.port));
         }
     });
 </script>

@@ -14,93 +14,344 @@ module.exports = function (RED) {
 
 	tls.DEFAULT_MIN_VERSION = "TLSv1.2";
 	tls.DEFAULT_MAX_VERSION = "TLSv1.3";
+    function wrapWampCallPayload(payload) {
+        if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+            const kwargs = Object.assign({}, payload);
+            const args0 = Object.assign({}, payload);
+            return { args: [args0], kwargs: kwargs };
+        }
+        if (Array.isArray(payload)) {
+            return { args: payload.slice(), kwargs: {} };
+        }
+        if (payload === undefined) {
+            return { args: [], kwargs: {} };
+        }
+        return { args: [payload], kwargs: {} };
+    }
 
-//-------------------------------------------------------------------------------------------------------------------
+    function ensurePayloadObject(msg) {
+        if (typeof msg.payload !== "object" || msg.payload === null) {
+            msg.payload = {};
+        }
+        return msg.payload;
+    }
 
-    function WampClientNode(config) {
-        RED.nodes.createNode(this, config);
-        
-        this.address = config.address;
-        this.realm = config.realm;
-        this.authId = config.authId;
-        this.password = config.password;
+    function assignConfigValue(target, value, aliases) {
+        if (value === undefined || value === null || value === "") {
+            return;
+        }
+        let normalized = value;
+        if (typeof normalized === "number") {
+            normalized = String(normalized);
+        }
+        aliases.forEach(function (alias) {
+            if (target[alias] === undefined) {
+                target[alias] = normalized;
+            }
+        });
+    }
 
-
-        this.wampClient = function () {
-            return wampClientPool.get(this.address, this.realm, this.authId, this.password);
-        };
-
-        this.on = function (a, b) {
-            this.wampClient().on(a, b);
-        };
-        this.close  = function (done) {
-            wampClientPool.close(this.address, this.realm, done);
+    function syncAliases(target, aliases) {
+        let chosen;
+        for (let i = 0; i < aliases.length; i++) {
+            const val = target[aliases[i]];
+            if (val !== undefined && val !== null && val !== "") {
+                chosen = val;
+                break;
+            }
+        }
+        if (chosen !== undefined) {
+            let normalized = chosen;
+            if (typeof normalized === "number") {
+                normalized = String(normalized);
+            }
+            aliases.forEach(function (alias) {
+                target[alias] = normalized;
+            });
         }
     }
-    RED.nodes.registerType("wamp-client", WampClientNode);
+
+    function findMissingAliases(target, aliasGroups) {
+        const missing = [];
+        aliasGroups.forEach(function (group) {
+            const hasValue = group.some(function (alias) {
+                const val = target[alias];
+                return val !== undefined && val !== null && val !== "";
+            });
+            if (!hasValue) {
+                missing.push(group[0]);
+            }
+        });
+        return missing;
+    }
+
+    function handleWampCallResult(result, node, msg, send, done) {
+        if (result && typeof result.then === "function") {
+            result.then(function (resp) {
+                RED.log.debug("call result: " + JSON.stringify(resp));
+                msg.payload = resp;
+                send(msg);
+                if (done) done();
+            }).catch(function (err) {
+                const em = (err && (err.error || err.message)) ? (err.error || err.message) : String(err);
+                node.status({ fill: "red", shape: "dot", text: em });
+                node.error(em, msg);
+                msg.error = em;
+                send(msg);
+                if (done) done(err);
+            });
+        } else {
+            msg.payload = result;
+            send(msg);
+            if (done) done();
+        }
+    }
+
+    function reportMissing(node, msg, send, done, missing) {
+        const text = "Missing required fields: " + missing.join(", ");
+        node.status({ fill: "red", shape: "dot", text: text });
+        node.error(text, msg);
+        msg.error = text;
+        send(msg);
+        if (done) done(text);
+    }
 
 //-------------------------------------------------------------------------------------------------------------------
 
-    // function WampClientOutNode(config) {
-        // RED.nodes.createNode(this, config);
-        // this.router = config.router;
-        // this.role = config.role;
-        // this.topic = config.topic;
-        // this.clientNode = RED.nodes.getNode(this.router);
+  function WampClientNode(config) {
+    RED.nodes.createNode(this, config);
 
-        // if (this.clientNode) {
-            // var node = this;
-            // node.wampClient = this.clientNode.wampClient();
+    // Build full address from IP + Port (both required in HTML defaults)
+    let ip = config.ip || "";
+    let port = config.port || "";
+    this.address = "wss://" + ip + ":" + port;
 
-            // this.clientNode.on("ready", function () {
-                // node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
-            // });
-            // this.clientNode.on("closed", function () {
-                // node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
-            // });
+    this.realm = "zenitel";
+    this.authId = config.authId;
+    this.password = config.password;
 
-            // node.on("input", function (msg) {
-                // if (msg.hasOwnProperty("payload")) {
-                    // var payload = msg.payload;
-                    // switch (this.role) {
-                        // case "publisher":
-                            // RED.log.info("wamp client publish: topic=" + this.topic + ", payload=" + JSON.stringify(payload));
-                            // payload && node.wampClient.publish(this.topic, payload);
-                            // break;
-                        // case "calleeResponse":
-                            // RED.log.info("wamp client callee response=" + JSON.stringify(payload));
-                            // msg._d && msg._d.resolve(payload);
-                            // break;
-                        // default:
-                            // RED.log.error("the role ["+this.role+"] is not recognized.");
-                            // break;
-                    // }
-                // }
-            // });
-        // } else {
-            // RED.log.error("wamp client config is missing!");
-        // }
+    this.wampClient = function () {
+        return wampClientPool.get(this.address, this.realm, this.authId, this.password);
+    };
 
-        // this.on("close", function(done) {
-            // if (this.clientNode) {
-                // this.clientNode.close(done);
-            // } else {
-                // done();
-            // }
-        // });
-    // }
-    // RED.nodes.registerType("wamp out", WampClientOutNode);
+    this.on = function (a, b) {
+        this.wampClient().on(a, b);
+    };
 
-//-------------------------------------------------------------------------------------------------------------------
+    this.close = function (done) {
+        wampClientPool.close(this.address, this.realm, done);
+    };
+}
+
+RED.nodes.registerType("wamp-client", WampClientNode);
+
+
+
+
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Event Nodes below	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Event|8| Node for generic subscriptions	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
 
     function WampClientInNode(config) {
         RED.nodes.createNode(this, config);
-        this.role = config.role;
+        this.role = "subscriber";
         this.router = config.router;
         this.topic = config.topic;
 		
 //EM		
 		RED.log.info("WampClientInNode(subscriber): role: " + this.role + ". router: " + this.router + ". topic: " + this.topic);				
+
+
+        this.clientNode = RED.nodes.getNode(this.router);
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            switch (this.role) {
+                case "subscriber":
+				
+//EM				
+		RED.log.info("WampClientInNode(subscriber): Call to node.wampClient.subscribe().");				
+                    if (!node.topic) {
+                        RED.log.warn("Zenitel WAMP In subscriber missing topic configuration.");
+                        node.status({fill:"red",shape:"dot",text:"no topic configured"});
+                        break;
+                    }
+
+                    node.wampClient.subscribe(node.topic,
+                        function (args, kwargs) {
+                            var msg = {topic: node.topic, payload: {args: args, kwargs: kwargs}};
+                            node.send(msg);
+                        });
+                    break;
+
+
+                case "calleeReceiver":
+                    node.wampClient.registerProcedure(this.topic, function (args, kwargs) {
+                        RED.log.debug("procedure: " + args +", " +kwargs);
+                        var d = autobahn.when.defer(); // create a deferred
+                        var msg = {procedure: this.topic, payload: {args: args, kwargs: kwargs}, _d: d};
+                        node.send(msg);
+                        return d.promise;
+                    });
+                    break;
+
+
+                default:
+                    RED.log.error("the role ["+this.role+"] is not recognized.");
+                    break;
+            }
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel WAMP In", WampClientInNode);
+
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Event|1| Node for directly reading General Purpose Inputs on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelGPINode(config) {
+        RED.nodes.createNode(this, config);
+        this.role = "subscriber";
+        this.router = config.router;
+        this.topic = "com.zenitel.device.gpi";
+
+
+//EM		
+		RED.log.info("WampClientInNode(subscriber): role: " + this.role + ". router: " + this.router + ". topic: " + this.topic);
+
+
+
+        this.clientNode = RED.nodes.getNode(this.router);
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            switch (this.role) {
+                case "subscriber":
+				
+//EM				
+		RED.log.info("WampClientInNode(subscriber): Call to node.wampClient.subscribe().");				
+				
+                    node.wampClient.subscribe(this.topic,
+                        function (args, kwargs)
+                        {
+                            var msg = {topic: node.topic,  payload: {args: args, kwargs: kwargs}};
+                            var eventData = (Array.isArray(args) && args.length > 0) ? args[0] : null;
+
+                            if (!eventData) {
+                                node.send(msg);
+                                return;
+                            }
+
+                            var eventDirno = String(eventData.dirno || "");
+                            var eventId = String(eventData.id || "");
+                            var eventGpis = String(eventData.gpis || "");
+                            var eventState = String(eventData.state || "");
+
+                            RED.log.info("Zenitel GPI node received message: " + JSON.stringify(msg) +
+                                " filtering for: dirno: " + config.dirno + " input: " + config.GPinput +
+                                " state: " + config.GPstate);
+
+                            var dirFilter = config.dirno || "";
+                            var dirMatches = eventDirno.includes(dirFilter);
+
+                            var inputFilter = config.GPinput || "";
+                            var normalizedInputFilters = [];
+                            if (inputFilter) {
+                                normalizedInputFilters.push(inputFilter);
+                                if (inputFilter.indexOf("gpio") === 0) {
+                                    normalizedInputFilters.push("gpi" + inputFilter.slice(4));
+                                } else if (inputFilter.indexOf("gpi") === 0) {
+                                    normalizedInputFilters.push("gpio" + inputFilter.slice(3));
+                                }
+                            }
+                            var inputMatches = !inputFilter || normalizedInputFilters.some(function (filterValue) {
+                                return eventId.includes(filterValue) || eventGpis.includes(filterValue);
+                            });
+
+                            var stateMatches = eventState.includes(config.GPstate || "");
+
+                            if (dirMatches && inputMatches && stateMatches) {
+                                node.send(msg);
+                            }
+                        });
+                    break;
+
+
+                case "calleeReceiver":
+                    node.wampClient.registerProcedure(this.topic, function (args, kwargs) {
+                        RED.log.debug("procedure: " + args +", " +kwargs);
+                        var d = autobahn.when.defer(); // create a deferred
+                        var msg = {procedure: this.topic, payload: {args: args, kwargs: kwargs}, _d: d};
+                        node.send(msg);
+                        return d.promise;
+                    });
+                    break;
+
+
+                default:
+                    RED.log.error("the role ["+this.role+"] is not recognized.");
+                    break;
+            }
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel GPI Event", ZenitelGPINode);
+
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Event|2| Node for directly reading General Purpose Outputs on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelGPONode(config) {
+        RED.nodes.createNode(this, config);
+        this.role = "subscriber";
+        this.router = config.router;
+        this.topic = "com.zenitel.device.gpo";
+
+
+//EM		
+		RED.log.info("WampClientInNode(subscriber): role: " + this.role + ". router: " + this.router + ". topic: " + this.topic);
+
 
 
         this.clientNode = RED.nodes.getNode(this.router);
@@ -127,7 +378,14 @@ module.exports = function (RED) {
      					{
 							var msg = {topic: this.topic,  payload: {args: args, kwargs: kwargs}
 						};
+						RED.log.info("Zenitel GPO node received message: " + JSON.stringify(msg) + " filtering for: dirno: " + config.dirno + " output: " + config.GPoutput + " state: " + config.GPstate);
+						var ContainsDirno = msg.payload.args[0].dirno.includes(config.dirno);
+						var ContainsGPoutput = msg.payload.args[0].id.includes(config.GPoutput);
+						var ContainsGPstate = msg.payload.args[0].operation.includes(config.GPstate);
+											
+						if(ContainsDirno && ContainsGPoutput  && ContainsGPstate){
                         node.send(msg);
+						}
                     });
                     break;
 
@@ -159,10 +417,455 @@ module.exports = function (RED) {
             }
         });
     }
-    RED.nodes.registerType("wamp in", WampClientInNode);
+    RED.nodes.registerType("Zenitel GPO Event", ZenitelGPONode);
 
 //-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Event|3| Node for directly reading Door open events on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelDoorOpen(config) {
+        RED.nodes.createNode(this, config);
+        this.role = "subscriber";
+        this.router = config.router;
+        this.topic = "com.zenitel.system.open_door";
 
+
+//EM		
+		RED.log.info("WampClientInNode(subscriber): role: " + this.role + ". router: " + this.router + ". topic: " + this.topic);
+
+
+
+        this.clientNode = RED.nodes.getNode(this.router);
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            switch (this.role) {
+                case "subscriber":
+				
+//EM				
+		RED.log.info("WampClientInNode(subscriber): Call to node.wampClient.subscribe().");				
+				
+                    const filterDoorDirno = (config.door_dirno || "").trim();
+                    const filterFromDirno = (config.from_dirno || "").trim();
+                    node.wampClient.subscribe(node.topic,
+                        function (args, kwargs)
+                        {
+                            const eventData = (kwargs && typeof kwargs === "object" && Object.keys(kwargs).length) ?
+                                kwargs :
+                                (Array.isArray(args) && args.length && typeof args[0] === "object" ? args[0] : {});
+                            const msg = {topic: node.topic,  payload: {args: args, kwargs: kwargs, data: eventData}};
+                            const eventDoorDirno = eventData.door_dirno;
+                            const eventFromDirno = eventData.from_dirno;
+                            const matchesDoorDirno = !filterDoorDirno || (eventDoorDirno !== undefined && String(eventDoorDirno).indexOf(filterDoorDirno) !== -1);
+                            const matchesFromDirno = !filterFromDirno || (eventFromDirno !== undefined && String(eventFromDirno).indexOf(filterFromDirno) !== -1);
+                            if (matchesDoorDirno && matchesFromDirno) {
+                                node.send(msg);
+                            }
+                        });
+                    break;
+
+
+                case "calleeReceiver":
+                    node.wampClient.registerProcedure(this.topic, function (args, kwargs) {
+                        RED.log.debug("procedure: " + args +", " +kwargs);
+                        var d = autobahn.when.defer(); // create a deferred
+                        var msg = {procedure: this.topic, payload: {args: args, kwargs: kwargs}, _d: d};
+                        node.send(msg);
+                        return d.promise;
+                    });
+                    break;
+
+
+                default:
+                    RED.log.error("the role ["+this.role+"] is not recognized.");
+                    break;
+            }
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Door Open", ZenitelDoorOpen);
+
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Event|4| Node for directly reading call states on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelCallState(config) {
+        RED.nodes.createNode(this, config);
+        this.role = "subscriber";
+        this.router = config.router;
+        this.topic = "com.zenitel.call";
+
+
+//EM		
+		RED.log.info("WampClientInNode(subscriber): role: " + this.role + ". router: " + this.router + ". topic: " + this.topic);
+
+
+
+        this.clientNode = RED.nodes.getNode(this.router);
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            switch (this.role) {
+                case "subscriber":
+				
+//EM				
+		RED.log.info("WampClientInNode(subscriber): Call to node.wampClient.subscribe().");				
+				
+                    const filterFromDirno = (config.fromdirno || "").trim();
+                    const filterToDirno = (config.todirno || "").trim();
+                    const filterCallstate = (config.callstate || "").trim();
+                    const filterReason = (config.reason || "").trim();
+                    node.wampClient.subscribe(node.topic,
+                        function (args, kwargs)
+                        {
+                            const eventData = (kwargs && typeof kwargs === "object" && Object.keys(kwargs).length) ?
+                                kwargs :
+                                (Array.isArray(args) && args.length && typeof args[0] === "object" ? args[0] : {});
+                            const msg = {topic: node.topic,  payload: {args: args, kwargs: kwargs, data: eventData}};
+                            const fromValue = eventData.fromdirno !== undefined ? eventData.fromdirno : eventData.from_dirno;
+                            const toValue = eventData.todirno !== undefined ? eventData.todirno : eventData.to_dirno;
+                            const stateValue = eventData.callstate !== undefined ? eventData.callstate : (eventData.call_state !== undefined ? eventData.call_state : eventData.state);
+                            const reasonValue = eventData.reason !== undefined ? eventData.reason : (eventData.cause !== undefined ? eventData.cause : eventData.reason_code);
+                            const matchesFrom = !filterFromDirno || (fromValue !== undefined && String(fromValue).indexOf(filterFromDirno) !== -1);
+                            const matchesTo = !filterToDirno || (toValue !== undefined && String(toValue).indexOf(filterToDirno) !== -1);
+                            const matchesState = !filterCallstate || (stateValue !== undefined && String(stateValue).indexOf(filterCallstate) !== -1);
+                            const matchesReason = !filterReason || (reasonValue !== undefined && String(reasonValue).indexOf(filterReason) !== -1);
+                            if (matchesFrom && matchesTo && matchesState && matchesReason) {
+                                node.send(msg);
+                            }
+                        });
+                    break;
+
+
+                case "calleeReceiver":
+                    node.wampClient.registerProcedure(this.topic, function (args, kwargs) {
+                        RED.log.debug("procedure: " + args +", " +kwargs);
+                        var d = autobahn.when.defer(); // create a deferred
+                        var msg = {procedure: this.topic, payload: {args: args, kwargs: kwargs}, _d: d};
+                        node.send(msg);
+                        return d.promise;
+                    });
+                    break;
+
+
+                default:
+                    RED.log.error("the role ["+this.role+"] is not recognized.");
+                    break;
+            }
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Call State", ZenitelCallState);
+
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Event|5| Node for directly reading device states of a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+     function ZenitelDeviceState(config) {
+        RED.nodes.createNode(this, config);
+        this.role = "subscriber";
+        this.router = config.router;
+        this.topic = "com.zenitel.system.device_account";
+        this.dirno = config.dirno;
+        this.state = config.state
+
+
+//EM		
+		RED.log.info("WampClientInNode(subscriber): role: " + this.role + ". router: " + this.router + ". topic: " + this.topic);
+
+
+
+        this.clientNode = RED.nodes.getNode(this.router);
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            switch (this.role) {
+                case "subscriber":
+				
+//EM				
+		RED.log.info("WampClientInNode(subscriber): Call to node.wampClient.subscribe().");				
+				
+                    const filterDirno = (config.dirno || "").trim();
+                    const filterState = (config.state || "").trim();
+                    const normalizedFilterState = filterState.toLowerCase();
+                    node.wampClient.subscribe(node.topic,
+                        function (args, kwargs)
+                        {
+                            const eventData = (kwargs && typeof kwargs === "object" && Object.keys(kwargs).length) ?
+                                kwargs :
+                                (Array.isArray(args) && args.length && typeof args[0] === "object" ? args[0] : {});
+                            const msg = {topic: node.topic,  payload: {args: args, kwargs: kwargs, data: eventData}};
+                            RED.log.info("Zenitel Device State node received message: " + JSON.stringify(msg) + " filtering for: dirno: " + config.dirno + " state: " + config.state);
+                            const eventDirno = eventData.dirno !== undefined ? eventData.dirno :
+                                (eventData.dir_no !== undefined ? eventData.dir_no : eventData.device_id);
+                            const eventState = eventData.state !== undefined ? eventData.state :
+                                (eventData.status !== undefined ? eventData.status : eventData.device_state);
+                            const matchesDirno = !filterDirno ||
+                                (eventDirno !== undefined && String(eventDirno).indexOf(filterDirno) !== -1);
+                            const matchesState = !filterState ||
+                                (eventState !== undefined && String(eventState).toLowerCase() === normalizedFilterState);
+                            if (matchesDirno && matchesState) {
+                                node.send(msg);
+                            }
+                        });
+                    break;
+
+
+                case "calleeReceiver":
+                    node.wampClient.registerProcedure(this.topic, function (args, kwargs) {
+                        RED.log.debug("procedure: " + args +", " +kwargs);
+                        var d = autobahn.when.defer(); // create a deferred
+                        var msg = {procedure: this.topic, payload: {args: args, kwargs: kwargs}, _d: d};
+                        node.send(msg);
+                        return d.promise;
+                    });
+                    break;
+
+
+                default:
+                    RED.log.error("the role ["+this.role+"] is not recognized.");
+                    break;
+            }
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Device State", ZenitelDeviceState);
+
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Event|6| Node for directly reading Event triggers from ZCP	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelEventTrigger(config) {
+        RED.nodes.createNode(this, config);
+        this.role = "subscriber";
+        this.router = config.router;
+        this.topic = "com.zenitel.system.event_trigger";
+
+
+//EM		
+		RED.log.info("WampClientInNode(subscriber): role: " + this.role + ". router: " + this.router + ". topic: " + this.topic);
+
+
+
+        this.clientNode = RED.nodes.getNode(this.router);
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            switch (this.role) {
+                case "subscriber":
+				
+//EM				
+		RED.log.info("WampClientInNode(subscriber): Call to node.wampClient.subscribe().");				
+				
+                    node.wampClient.subscribe(this.topic,
+     					function (args, kwargs)
+     					{
+							var msg = {topic: this.topic,  payload: {args: args, kwargs: kwargs}
+						};
+						RED.log.info("Zenitel Event Trigger node received message: " + JSON.stringify(msg) + " filtering for: dirno: " + config.dirno +" eventno: " + config.eventno);
+						var ContainsDirno = msg.payload.args[0].from_dirno.includes(config.dirno);
+						var ContainsEventno = msg.payload.args[0].to_dirno.includes(config.eventno);
+											
+						if(ContainsDirno && ContainsEventno){
+                        node.send(msg);
+						}
+                    });
+                    break;
+
+
+                case "calleeReceiver":
+                    node.wampClient.registerProcedure(this.topic, function (args, kwargs) {
+                        RED.log.debug("procedure: " + args +", " +kwargs);
+                        var d = autobahn.when.defer(); // create a deferred
+                        var msg = {procedure: this.topic, payload: {args: args, kwargs: kwargs}, _d: d};
+                        node.send(msg);
+                        return d.promise;
+                    });
+                    break;
+
+
+                default:
+                    RED.log.error("the role ["+this.role+"] is not recognized.");
+                    break;
+            }
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Event Trigger", ZenitelEventTrigger);
+
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Event|7| Node for directly reading extended states of a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+     function ZenitelExtendedState(config) {
+        RED.nodes.createNode(this, config);
+        this.role = "subscriber";
+        this.router = config.router;
+        this.topic = "com.zenitel.system.device.extended_status";
+
+
+//EM		
+		RED.log.info("WampClientInNode(subscriber): role: " + this.role + ". router: " + this.router + ". topic: " + this.topic);
+
+
+
+        this.clientNode = RED.nodes.getNode(this.router);
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            switch (this.role) {
+                case "subscriber":
+				
+//EM				
+		RED.log.info("WampClientInNode(subscriber): Call to node.wampClient.subscribe().");				
+				
+                    const filterDirno = (config.dirno || "").trim();
+                    const filterTesttype = (config.testtype || "").trim();
+                    const filterTestresult = (config.testresult || "").trim();
+                    node.wampClient.subscribe(node.topic,
+                        function (args, kwargs)
+                        {
+                            const eventData = (kwargs && typeof kwargs === "object" && Object.keys(kwargs).length) ?
+                                kwargs :
+                                (Array.isArray(args) && args.length && typeof args[0] === "object" ? args[0] : {});
+                            const msg = {topic: node.topic,  payload: {args: args, kwargs: kwargs, data: eventData}};
+                            RED.log.info("Zenitel Extended State node received message: " + JSON.stringify(msg) + " filtering for: dirno: " + config.dirno + " testtype: " + config.testtype + " testresult: " + config.testresult);
+                            const eventDirno = eventData.dirno !== undefined ? eventData.dirno :
+                                (eventData.dir_no !== undefined ? eventData.dir_no : eventData.device_id);
+                            const eventTesttype = eventData.status_type !== undefined ? eventData.status_type :
+                                (eventData.test_type !== undefined ? eventData.test_type : eventData.type);
+                            const eventTestresult = eventData.current_status !== undefined ? eventData.current_status :
+                                (eventData.result !== undefined ? eventData.result : eventData.status);
+                            const matchesDirno = !filterDirno ||
+                                (eventDirno !== undefined && String(eventDirno).indexOf(filterDirno) !== -1);
+                            const matchesTesttype = !filterTesttype ||
+                                (eventTesttype !== undefined && String(eventTesttype).indexOf(filterTesttype) !== -1);
+                            const matchesTestresult = !filterTestresult ||
+                                (eventTestresult !== undefined && String(eventTestresult).indexOf(filterTestresult) !== -1);
+                            if (matchesDirno && matchesTesttype && matchesTestresult) {
+                                node.send(msg);
+                            }
+                        });
+                    break;
+
+
+                case "calleeReceiver":
+                    node.wampClient.registerProcedure(this.topic, function (args, kwargs) {
+                        RED.log.debug("procedure: " + args +", " +kwargs);
+                        var d = autobahn.when.defer(); // create a deferred
+                        var msg = {procedure: this.topic, payload: {args: args, kwargs: kwargs}, _d: d};
+                        node.send(msg);
+                        return d.promise;
+                    });
+                    break;
+
+
+                default:
+                    RED.log.error("the role ["+this.role+"] is not recognized.");
+                    break;
+            }
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Extended State", ZenitelExtendedState);
+
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action Nodes below	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|9| Generic Zenitel WAMP call node	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
     function WampClientCallNode(config) {
         RED.nodes.createNode(this, config);
         this.router = config.router;
@@ -181,21 +884,14 @@ module.exports = function (RED) {
                 node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
             });
 
-            node.on("input", function (msg) {
-                if (this.procedure) {
-                    var d = node.wampClient.callProcedure(this.procedure, msg.payload);
-                    if (d) {
-                        d.then(
-                            function (resp) {
-                                RED.log.debug("call result: " +JSON.stringify(resp));
-                                node.send({payload: resp});
-                            },
-                            function (err) {
-                                RED.log.warn("call response failed: " + err.error);
-                            }
-                        )
-                    }
-                }
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payload = ensurePayloadObject(msg);
+                const callMessage = wrapWampCallPayload(payload);
+
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
             });
         } else {
             RED.log.error("wamp client config is missing!");
@@ -209,10 +905,1412 @@ module.exports = function (RED) {
             }
         });
     }
-    RED.nodes.registerType("wamp call", WampClientCallNode);
+    RED.nodes.registerType("Zenitel WAMP Out", WampClientCallNode);
 	
 	//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|1| Node for directly setting up calls on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+  function ZenitelCallSetup(config) {
+    RED.nodes.createNode(this, config);
+
+    this.router    = config.router;
+    this.procedure = 'com.zenitel.calls.post';
+    this.fromdirno = config.fromdirno;
+    this.todirno   = config.todirno;
+    this.priority  = config.priority;
+
+    this.clientNode = RED.nodes.getNode(this.router);
+
+    if (this.clientNode) {
+        const node = this;
+        node.wampClient = this.clientNode.wampClient();
+
+        this.clientNode.on("ready", function () {
+            node.status({ fill: "green", shape: "dot", text: "node-red:common.status.connected" });
+        });
+        this.clientNode.on("closed", function () {
+            node.status({ fill: "red", shape: "ring", text: "node-red:common.status.not-connected" });
+        });
+
+        node.on("input", function (msg, send, done) {
+            send = send || node.send;
+
+            const payload = ensurePayloadObject(msg);
+
+                assignConfigValue(payload, node.fromdirno, ["from_dirno"]);
+                assignConfigValue(payload, node.todirno, ["to_dirno"]);
+                if (node.priority !== undefined && node.priority !== "") {
+                    payload.priority = node.priority;
+                }
+
+                if (payload.from_dirno !== undefined) payload.from_dirno = String(payload.from_dirno);
+                if (payload.to_dirno !== undefined) payload.to_dirno = String(payload.to_dirno);
+                
+
+                let pr = payload.priority;
+                if (pr === undefined || pr === "") {
+                    pr = "40";
+                } else {
+                    pr = String(pr);
+                }
+                payload.priority = pr;
+
+            const missing = findMissingAliases(payload, [["from_dirno"], ["to_dirno"]]);
+            if (missing.length) {
+                reportMissing(node, msg, send, done, missing);
+                return;
+            }
+
+            if (payload.action === undefined || payload.action === "") {
+                payload.action = "setup";
+            }
+            if (payload.verbose === undefined) {
+                payload.verbose = false;
+            }
+
+            const callMessage = wrapWampCallPayload(payload);
+            const result = node.wampClient.callProcedure(node.procedure, callMessage);
+            handleWampCallResult(result, node, msg, send, done);
+        });
+    } else {
+        RED.log.error("wamp client config is missing!");
+    }
+
+    this.on("close", function (done) {
+        if (this.clientNode) {
+            this.clientNode.close(done);
+        } else {
+            done();
+        }
+    });
+}
+RED.nodes.registerType("Zenitel Call Setup", ZenitelCallSetup);
+
+	
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|2| Node for directly playing an audio message on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelPlayAudioMessage(config) {
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = 'com.zenitel.calls.post';
+		this.audiomsgdirno = config.audiomsgdirno;
+        this.todirno = config.todirno;
+        this.clientNode = RED.nodes.getNode(this.router)
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payload = ensurePayloadObject(msg);
+
+                assignConfigValue(payload, node.audiomsgdirno, ["audio_msg_dirno", "audiomsgdirno", "from_dirno", "fromdirno"]);
+                assignConfigValue(payload, node.todirno, ["to_dirno", "todirno"]);
+
+                syncAliases(payload, ["audio_msg_dirno", "audiomsgdirno", "from_dirno", "fromdirno"]);
+                syncAliases(payload, ["to_dirno", "todirno"]);
+
+                if (payload.from_dirno === undefined && payload.audio_msg_dirno !== undefined) {
+                    payload.from_dirno = payload.audio_msg_dirno;
+                }
+                if (payload.fromdirno === undefined && payload.from_dirno !== undefined) {
+                    payload.fromdirno = payload.from_dirno;
+                }
+                if (payload.audio_msg_dirno === undefined && payload.from_dirno !== undefined) {
+                    payload.audio_msg_dirno = payload.from_dirno;
+                }
+
+                if (payload.from_dirno !== undefined) payload.from_dirno = String(payload.from_dirno);
+                if (payload.fromdirno !== undefined) payload.fromdirno = String(payload.fromdirno);
+                if (payload.audio_msg_dirno !== undefined) payload.audio_msg_dirno = String(payload.audio_msg_dirno);
+                if (payload.audiomsgdirno !== undefined) payload.audiomsgdirno = String(payload.audiomsgdirno);
+                if (payload.to_dirno !== undefined) payload.to_dirno = String(payload.to_dirno);
+                if (payload.todirno !== undefined) payload.todirno = String(payload.todirno);
+
+                let pr = payload.priority;
+                if (pr === undefined || pr === "") {
+                    pr = "40";
+                } else {
+                    pr = String(pr);
+                }
+                payload.priority = pr;
+
+                if (payload.to_dirno && !payload.todirno) payload.todirno = payload.to_dirno;
+                if (payload.todirno && !payload.to_dirno) payload.to_dirno = payload.todirno;
+
+                const missing = findMissingAliases(payload, [["from_dirno", "fromdirno"], ["to_dirno", "todirno"]]);
+                if (missing.length) {
+                    reportMissing(node, msg, send, done, missing);
+                    return;
+                }
+
+                if (payload.action === undefined || payload.action === "") {
+                    payload.action = "setup";
+                }
+                if (payload.verbose === undefined) {
+                    payload.verbose = false;
+                }
+
+                const callMessage = wrapWampCallPayload(payload);
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
+            });
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Play Audio Message", ZenitelPlayAudioMessage);
+	
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|3| Node for directly door opening on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelDoorOpener(config) {
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = 'com.zenitel.calls.call.open_door.post';
+		this.dirno = config.dirno;
+        this.clientNode = RED.nodes.getNode(this.router)
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payload = ensurePayloadObject(msg);
+
+                assignConfigValue(payload, node.dirno, ["from_dirno"]);
+                syncAliases(payload, ["from_dirno"]);
+
+                const missing = findMissingAliases(payload, [["from_dirno"]]);
+                if (missing.length) {
+                    reportMissing(node, msg, send, done, missing);
+                    return;
+                }
+
+                const callMessage = wrapWampCallPayload(payload);
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
+            });
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Door Opener", ZenitelDoorOpener);
+	
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|4| Node for triggering an output on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelGPOTrigger(config) {
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = 'com.zenitel.devices.device.gpos.gpo.post';
+		this.dirno = config.dirno;
+        this.GPoutput = config.GPoutput;
+		this.GPaction = config.GPaction;
+		this.ontime = config.ontime;
+        this.clientNode = RED.nodes.getNode(this.router)
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payload = ensurePayloadObject(msg);
+
+                assignConfigValue(payload, node.dirno, ["dirno"]);
+                assignConfigValue(payload, node.GPoutput, ["id", "output", "gp_output", "GPoutput"]);
+                assignConfigValue(payload, node.GPaction, ["operation", "action", "state", "GPaction"]);
+                assignConfigValue(payload, node.ontime, ["time", "on_time", "ontime"]);
+
+                function firstDefined() {
+                    for (let i = 0; i < arguments.length; i++) {
+                        const val = payload[arguments[i]];
+                        if (val !== undefined && val !== null && String(val).trim() !== "") {
+                            return val;
+                        }
+                    }
+                    return undefined;
+                }
+
+                function normalizeOperation(value) {
+                    if (value === undefined || value === null) {
+                        return undefined;
+                    }
+                    const lower = String(value).trim().toLowerCase();
+                    switch (lower) {
+                        case "on":
+                        case "set":
+                            return "set";
+                        case "off":
+                        case "clear":
+                            return "clear";
+                        case "slow_blink":
+                        case "slowblink":
+                        case "slow-blink":
+                        case "slow blink":
+                            return "slow_blink";
+                        case "fast_blink":
+                        case "fastblink":
+                        case "fast-blink":
+                        case "fast blink":
+                            return "fast_blink";
+                        case "timed on":
+                        case "timed_on":
+                        case "set_timed":
+                        case "settimed":
+                        case "set-timed":
+                        case "timed":
+                            return "set_timed";
+                        default:
+                            return lower;
+                    }
+                }
+                const allowedOperations = new Set(["set", "clear", "slow_blink", "fast_blink", "set_timed"]);
+
+                const dirnoValue = firstDefined("dirno");
+                const gpoValue = firstDefined("id", "output", "gp_output", "GPoutput");
+                let dirno = dirnoValue !== undefined && dirnoValue !== null ? String(dirnoValue).trim() : "";
+                let gpoId = gpoValue !== undefined && gpoValue !== null ? String(gpoValue).trim() : "";
+                let operation = normalizeOperation(firstDefined("operation", "action", "state", "GPaction"));
+                let timeValue = firstDefined("time", "on_time", "ontime");
+
+                const validationErrors = [];
+                if (!dirno) {
+                    validationErrors.push("dirno");
+                }
+                if (!gpoId) {
+                    validationErrors.push("id");
+                }
+                if (!operation || !allowedOperations.has(operation)) {
+                    validationErrors.push("operation");
+                }
+
+                let numericTime;
+                if (timeValue !== undefined && timeValue !== null && String(timeValue).trim() !== "") {
+                    numericTime = Number(timeValue);
+                    if (!Number.isFinite(numericTime) || numericTime < 0) {
+                        const text = "Invalid time value. Provide a non-negative number.";
+                        node.status({ fill: "red", shape: "dot", text: text });
+                        node.error(text, msg);
+                        msg.error = text;
+                        send(msg);
+                        if (done) done(text);
+                        return;
+                    }
+                }
+
+                if (operation === "set_timed" && numericTime === undefined) {
+                    validationErrors.push("time");
+                }
+
+                if (validationErrors.length) {
+                    reportMissing(node, msg, send, done, validationErrors);
+                    return;
+                }
+
+                const request = {
+                    dirno: dirno,
+                    id: gpoId,
+                    operation: operation
+                };
+                if (numericTime !== undefined) {
+                    request.time = numericTime;
+                }
+
+                msg.payload = request;
+
+                const callMessage = wrapWampCallPayload(request);
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
+            });
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel GPO Trigger", ZenitelGPOTrigger);
+	
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|5| Node for simulate a key press on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelKeyPress(config) {
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = 'com.zenitel.devices.device.key.post';
+		this.dirno = config.dirno;
+        this.buttonkey = config.buttonkey;
+        this.action = config.action;
+        this.clientNode = RED.nodes.getNode(this.router)
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payload = ensurePayloadObject(msg);
+
+                assignConfigValue(payload, node.dirno, ["dirno"]);
+                assignConfigValue(payload, node.buttonkey, ["id"]);
+                assignConfigValue(payload, node.action, ["edge", "action"]);
+
+                syncAliases(payload, ["dirno"]);
+                syncAliases(payload, ["id"]);
+                syncAliases(payload, ["edge", "action"]);
+
+                if (payload.edge === undefined || payload.edge === null || payload.edge === "") {
+                    payload.edge = "tap";
+                    syncAliases(payload, ["edge", "action"]);
+                }
+
+                const missing = findMissingAliases(payload, [["dirno"], ["id"]]);
+                if (missing.length) {
+                    reportMissing(node, msg, send, done, missing);
+                    return;
+                }
+
+                const callMessage = wrapWampCallPayload(payload);
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
+            });
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Key Press", ZenitelKeyPress);
+	
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|6| Node for setting call forwarding on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelCallForwarding(config) {
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = 'com.zenitel.call_forwarding.post';
+		this.dirno = config.dirno;
+        this.fwddirno = config.fwddirno;
+		this.rule = config.rule;
+        this.enable = config.enable;
+        this.clientNode = RED.nodes.getNode(this.router)
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payloadItems = Array.isArray(msg.payload) ? msg.payload : [ensurePayloadObject(msg)];
+
+                if (!payloadItems.length) {
+                    reportMissing(node, msg, send, done, ["dirno", "fwd_type", "fwd_to", "enabled"]);
+                    return;
+                }
+
+                const rules = [];
+                const missingDetails = [];
+
+                payloadItems.forEach(function (item, index) {
+                    if (typeof item !== "object" || item === null) {
+                        item = {};
+                        payloadItems[index] = item;
+                    }
+
+                    assignConfigValue(item, node.dirno, ["dirno"]);
+                    assignConfigValue(item, node.fwddirno, ["fwddirno", "forward_dirno", "to_dirno", "todirno", "fwd_to"]);
+                    assignConfigValue(item, node.rule, ["rule", "fwd_type"]);
+                    assignConfigValue(item, node.enable, ["enable", "enabled"]);
+
+                    syncAliases(item, ["dirno"]);
+                    syncAliases(item, ["fwddirno", "forward_dirno", "to_dirno", "todirno", "fwd_to"]);
+                    syncAliases(item, ["rule", "fwd_type"]);
+                    syncAliases(item, ["enable", "enabled"]);
+
+                    let enabledValue = item.enabled !== undefined ? item.enabled : item.enable;
+                    if (typeof enabledValue === "string") {
+                        const lower = enabledValue.trim().toLowerCase();
+                        if (lower === "true" || lower === "enable" || lower === "enabled" || lower === "on") {
+                            enabledValue = true;
+                        } else if (lower === "false" || lower === "disable" || lower === "disabled" || lower === "off") {
+                            enabledValue = false;
+                        } else {
+                            enabledValue = undefined;
+                        }
+                    }
+
+                    const ruleObject = {
+                        dirno: item.dirno,
+                        fwd_type: item.fwd_type || item.rule,
+                        fwd_to: item.fwd_to || item.fwddirno || item.forward_dirno || item.to_dirno || item.todirno,
+                        enabled: enabledValue
+                    };
+
+                    const missing = [];
+                    if (!ruleObject.dirno) { missing.push("dirno"); }
+                    if (!ruleObject.fwd_type) { missing.push("fwd_type"); }
+                    if (!ruleObject.fwd_to) { missing.push("fwd_to"); }
+                    if (ruleObject.enabled === undefined) { missing.push("enabled"); }
+
+                    if (missing.length) {
+                        missingDetails.push("rule[" + index + "]: " + missing.join(", "));
+                    } else {
+                        rules.push(ruleObject);
+                    }
+                });
+
+                if (missingDetails.length) {
+                    const text = "Missing required fields: " + missingDetails.join("; ");
+                    node.status({ fill: "red", shape: "dot", text: text });
+                    node.error(text, msg);
+                    msg.error = text;
+                    send(msg);
+                    if (done) done(text);
+                    return;
+                }
+
+                const callMessage = { args: [rules], kwargs: {} };
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
+            });
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Setup Call Forwarding", ZenitelCallForwarding);
+	
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|7| Node for executing a button test on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelButtonTest(config) {
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = 'com.zenitel.system.devices.test.button.post';
+		this.dirno = config.dirno;
+        this.clientNode = RED.nodes.getNode(this.router)
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payload = ensurePayloadObject(msg);
+
+                assignConfigValue(payload, node.dirno, ["dirno"]);
+                syncAliases(payload, ["dirno"]);
+
+                const missing = findMissingAliases(payload, [["dirno"]]);
+                if (missing.length) {
+                    reportMissing(node, msg, send, done, missing);
+                    return;
+                }
+
+                const callMessage = wrapWampCallPayload(payload);
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
+            });
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Button Test", ZenitelButtonTest);
+	
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|8| Node for executing a tone test on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelToneTest(config) {
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = 'com.zenitel.system.devices.test.tone.post';
+		this.dirno = config.dirno;
+        this.clientNode = RED.nodes.getNode(this.router)
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payload = ensurePayloadObject(msg);
+
+                assignConfigValue(payload, node.dirno, ["dirno"]);
+                syncAliases(payload, ["dirno"]);
+
+                const missing = findMissingAliases(payload, [["dirno"]]);
+                if (missing.length) {
+                    reportMissing(node, msg, send, done, missing);
+                    return;
+                }
+
+                const callMessage = wrapWampCallPayload(payload);
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
+            });
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Tone Test", ZenitelToneTest);
+
+    //-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|10| Node for directly ending a call on a Zenitel intercom device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+	
+//-------------------------------------------------------------------------------------------------------------------
+function ZenitelCallEnd(config) {
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = 'com.zenitel.calls.delete';
+		this.dirno = config.dirno;
+        this.clientNode = RED.nodes.getNode(this.router)
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payload = ensurePayloadObject(msg);
+
+                assignConfigValue(payload, node.dirno, ["dirno"]);
+                syncAliases(payload, ["dirno"]);
+
+                const missing = findMissingAliases(payload, [["dirno"]]);
+                if (missing.length) {
+                    reportMissing(node, msg, send, done, missing);
+                    return;
+                }
+
+                const callMessage = wrapWampCallPayload(payload);
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
+            });
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Call End", ZenitelCallEnd);
+
+    //-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|11|  Node for directly ending audio message	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+	
+//-------------------------------------------------------------------------------------------------------------------
+function ZenitelAudioMessageEnd(config) {
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = 'com.zenitel.calls.delete';
+		this.dirno = config.dirno;
+        this.clientNode = RED.nodes.getNode(this.router)
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payload = ensurePayloadObject(msg);
+
+                assignConfigValue(payload, node.dirno, ["dirno"]);
+                syncAliases(payload, ["dirno"]);
+
+                const missing = findMissingAliases(payload, [["dirno"]]);
+                if (missing.length) {
+                    reportMissing(node, msg, send, done, missing);
+                    return;
+                }
+
+                const callMessage = wrapWampCallPayload(payload);
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
+            });
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Audio Message End", ZenitelAudioMessageEnd);
+
+    //-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|12| Node for deleting call forwarding rules	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+	
+//-------------------------------------------------------------------------------------------------------------------
+    function ZenitelDeleteCallForwarding(config) {
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = 'com.zenitel.call_forwarding.delete';
+		this.dirno = config.dirno;
+        this.fwd_type = config.fwd_type || config.rule;
+        this.clientNode = RED.nodes.getNode(this.router)
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payload = ensurePayloadObject(msg);
+
+                assignConfigValue(payload, node.dirno, ["dirno"]);
+                assignConfigValue(payload, node.fwd_type, ["fwd_type", "rule"]);
+                syncAliases(payload, ["dirno"]);
+                syncAliases(payload, ["fwd_type", "rule"]);
+
+                const missing = findMissingAliases(payload, [["dirno"], ["fwd_type", "rule"]]);
+                if (missing.length) {
+                    reportMissing(node, msg, send, done, missing);
+                    return;
+                }
+
+                if (payload.rule !== undefined) {
+                    delete payload.rule;
+                }
+
+                const callMessage = wrapWampCallPayload(payload);
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
+            });
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Delete Call Forwarding", ZenitelDeleteCallForwarding);
+
+
+    //-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Request|1| Node for requesting device accounts	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//-------------------------------------------------------------------------------------------------------------------
 		
+function ZenitelDeviceAccountRequest(config) {
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = 'com.zenitel.system.device_accounts';
+        this.state = config.state;
+        this.clientNode = RED.nodes.getNode(this.router);
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payload = ensurePayloadObject(msg);
+
+                assignConfigValue(payload, node.state, ["state"]);
+                syncAliases(payload, ["state"]);
+
+                const request = Object.assign({}, payload);
+
+                if (request.state !== undefined && request.state !== null && request.state !== "") {
+                    let normalizedState = String(request.state).trim().toLowerCase();
+                    if (normalizedState === "all" || normalizedState === "*") {
+                        delete request.state;
+                    } else {
+                        request.state = normalizedState;
+                    }
+                } else if (request.state !== undefined) {
+                    delete request.state;
+                }
+
+                const callPayload = Object.keys(request).length ? request : undefined;
+                const callMessage = wrapWampCallPayload(callPayload);
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
+            });
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel Device Account Request", ZenitelDeviceAccountRequest);
+
+    //-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Request|2| Node for requesting audio messages
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//-------------------------------------------------------------------------------------------------------------------
+
+
+  function ZenitelAudioMessageRequest(config) {
+    RED.nodes.createNode(this, config);
+    this.router = config.router;
+    this.procedure = "com.zenitel.system.audio_messages"; 
+    this.clientNode = RED.nodes.getNode(this.router);
+
+    if (!this.clientNode) {
+      RED.log.error("wamp client config is missing!");
+      return;
+    }
+
+    const node = this;
+    node.wampClient = this.clientNode.wampClient();
+
+    this.clientNode.on("ready", function () {
+      node.status({ fill: "green", shape: "dot", text: "node-red:common.status.connected" });
+    });
+    this.clientNode.on("closed", function () {
+      node.status({ fill: "red", shape: "ring", text: "node-red:common.status.not-connected" });
+    });
+
+    node.on("input", function (msg, send, done) {
+      send = send || node.send;
+
+     
+      const callMessage = wrapWampCallPayload(); 
+      const result = node.wampClient.callProcedure(node.procedure, callMessage);
+
+      handleWampCallResult(result, node, msg, send, done);
+    });
+
+    this.on("close", function (done) {
+      if (this.clientNode) this.clientNode.close(done);
+      else done();
+    });
+  }
+
+  RED.nodes.registerType("Zenitel Audio Message Request", ZenitelAudioMessageRequest);
+
+  //-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Request|3|  Node for requesting groups	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//-------------------------------------------------------------------------------------------------------------------
+function ZenitelGroupsRequest(config) {
+    RED.nodes.createNode(this, config);
+    this.router = config.router;
+    this.procedure = "com.zenitel.groups"; 
+    this.groupdirno = config.groupdirno;
+    this.verbose = config.verbose;
+    this.clientNode = RED.nodes.getNode(this.router);
+
+    if (!this.clientNode) {
+      RED.log.error("wamp client config is missing!");
+      return;
+    }
+
+    const node = this;
+    node.wampClient = this.clientNode.wampClient();
+
+    this.clientNode.on("ready", function () {
+      node.status({ fill: "green", shape: "dot", text: "node-red:common.status.connected" });
+    });
+    this.clientNode.on("closed", function () {
+      node.status({ fill: "red", shape: "ring", text: "node-red:common.status.not-connected" });
+    });
+
+    node.on("input", function (msg, send, done) {
+      send = send || node.send;
+
+      const payload = ensurePayloadObject(msg);
+
+      let dirno = payload.dirno;
+      if (!dirno) {
+        dirno = payload.groupdirno;
+      }
+      if (!dirno) {
+        dirno = node.groupdirno;
+      }
+
+      if (dirno !== undefined && dirno !== null) {
+        dirno = String(dirno).trim();
+        if (dirno === "") {
+          dirno = undefined;
+        }
+      }
+
+      let verbose = payload.verbose;
+      if (verbose === undefined || verbose === null || verbose === "") {
+        verbose = node.verbose;
+      }
+
+      if (verbose !== undefined && verbose !== null && verbose !== "") {
+        if (typeof verbose === "string") {
+          verbose = verbose.trim().toLowerCase();
+          if (verbose === "true" || verbose === "yes" || verbose === "1") {
+            verbose = true;
+          } else if (verbose === "false" || verbose === "no" || verbose === "0") {
+            verbose = false;
+          } else {
+            verbose = undefined;
+          }
+        } else {
+          verbose = Boolean(verbose);
+        }
+      } else if (verbose === "") {
+        verbose = undefined;
+      }
+
+      let callPayload;
+      if (dirno || verbose !== undefined) {
+        callPayload = {};
+        if (dirno) callPayload.dirno = dirno;
+        if (verbose !== undefined) callPayload.verbose = verbose;
+      }
+      const callMessage = wrapWampCallPayload(callPayload); 
+      const result = node.wampClient.callProcedure(node.procedure, callMessage);
+
+      handleWampCallResult(result, node, msg, send, done);
+    });
+
+    this.on("close", function (done) {
+      if (this.clientNode) this.clientNode.close(done);
+      else done();
+    });
+  }
+
+  RED.nodes.registerType("Zenitel Groups Request", ZenitelGroupsRequest);
+
+
+  //-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Request|4|  Node for requesting directory	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//-------------------------------------------------------------------------------------------------------------------
+function ZenitelDirectoryRequest(config) {
+    RED.nodes.createNode(this, config);
+    this.router = config.router;
+    this.procedure = "com.zenitel.directory"; 
+    this.dirno = config.dirno;
+    this.clientNode = RED.nodes.getNode(this.router);
+
+    if (!this.clientNode) {
+      RED.log.error("wamp client config is missing!");
+      return;
+    }
+
+    const node = this;
+    node.wampClient = this.clientNode.wampClient();
+
+    this.clientNode.on("ready", function () {
+      node.status({ fill: "green", shape: "dot", text: "node-red:common.status.connected" });
+    });
+    this.clientNode.on("closed", function () {
+      node.status({ fill: "red", shape: "ring", text: "node-red:common.status.not-connected" });
+    });
+
+    node.on("input", function (msg, send, done) {
+      send = send || node.send;
+
+      const payload = ensurePayloadObject(msg);
+
+      let dirno = payload.dirno;
+      if (!dirno) {
+        dirno = payload.dirno;
+      }
+      if (!dirno) {
+        dirno = node.dirno;
+      }
+
+      if (dirno !== undefined && dirno !== null) {
+        dirno = String(dirno).trim();
+        if (dirno === "") {
+          dirno = undefined;
+        }
+      }
+
+      const callPayload = dirno ? { dirno: dirno } : undefined;
+      const callMessage = wrapWampCallPayload(callPayload); 
+      const result = node.wampClient.callProcedure(node.procedure, callMessage);
+
+      handleWampCallResult(result, node, msg, send, done);
+    });
+
+    this.on("close", function (done) {
+      if (this.clientNode) this.clientNode.close(done);
+      else done();
+    });
+  }
+
+  RED.nodes.registerType("Zenitel Directory Request", ZenitelDirectoryRequest);
+
+  //-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Request|5|  Node for requesting call forwarding rules
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//-------------------------------------------------------------------------------------------------------------------
+
+
+  function ZenitelCallForwardingRequest(config) {
+    RED.nodes.createNode(this, config);
+    this.router = config.router;
+    this.procedure = "com.zenitel.call_forwarding"; 
+    this.dirno = config.dirno;
+    this.fwdType = config.fwd_type;
+    this.clientNode = RED.nodes.getNode(this.router);
+
+    if (!this.clientNode) {
+      RED.log.error("wamp client config is missing!");
+      return;
+    }
+
+    const node = this;
+    node.wampClient = this.clientNode.wampClient();
+
+    this.clientNode.on("ready", function () {
+      node.status({ fill: "green", shape: "dot", text: "node-red:common.status.connected" });
+    });
+    this.clientNode.on("closed", function () {
+      node.status({ fill: "red", shape: "ring", text: "node-red:common.status.not-connected" });
+    });
+
+    node.on("input", function (msg, send, done) {
+      send = send || node.send;
+
+      const payload = ensurePayloadObject(msg);
+
+      let dirno = payload.dirno;
+      if (dirno === undefined || dirno === null || dirno === "") {
+        dirno = node.dirno;
+      }
+
+      let fwd_type = payload.fwd_type;
+      if (fwd_type === undefined || fwd_type === null || fwd_type === "") {
+        fwd_type = node.fwdType;
+      }
+
+      if (dirno !== undefined && dirno !== null) {
+        dirno = String(dirno).trim();
+        if (dirno === "") dirno = undefined;
+      }
+
+      if (fwd_type !== undefined && fwd_type !== null) {
+        fwd_type = String(fwd_type).trim();
+        if (fwd_type === "" || fwd_type.toLowerCase() === "all" || fwd_type === "*") {
+          fwd_type = undefined;
+        }
+      }
+
+      let callPayload;
+      if (dirno || fwd_type) {
+        callPayload = {};
+        if (dirno) callPayload.dirno = dirno;
+        if (fwd_type) callPayload.fwd_type = fwd_type;
+      }
+
+      const callMessage = wrapWampCallPayload(callPayload); 
+      const result = node.wampClient.callProcedure(node.procedure, callMessage);
+
+      handleWampCallResult(result, node, msg, send, done);
+    });
+
+    this.on("close", function (done) {
+      if (this.clientNode) this.clientNode.close(done);
+      else done();
+    });
+  }
+
+  RED.nodes.registerType("Zenitel Call Forwarding Request", ZenitelCallForwardingRequest);
+   //-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Request|6| Node for requesting current calls
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//-------------------------------------------------------------------------------------------------------------------
+
+
+  function ZenitelCurrentCallsRequest(config) {
+    RED.nodes.createNode(this, config);
+    this.router = config.router;
+    this.procedure = "com.zenitel.calls"; 
+    this.clientNode = RED.nodes.getNode(this.router);
+    this.fromDirno = config.fromdirno || config.from_dirno;
+    this.toDirno = config.todirno || config.to_dirno;
+    this.state = config.state;
+    this.verbose = config.verbose;
+
+    if (!this.clientNode) {
+      RED.log.error("wamp client config is missing!");
+      return;
+    }
+
+    const node = this;
+    node.wampClient = this.clientNode.wampClient();
+
+    this.clientNode.on("ready", function () {
+      node.status({ fill: "green", shape: "dot", text: "node-red:common.status.connected" });
+    });
+    this.clientNode.on("closed", function () {
+      node.status({ fill: "red", shape: "ring", text: "node-red:common.status.not-connected" });
+    });
+
+    node.on("input", function (msg, send, done) {
+      send = send || node.send;
+
+      const payload = ensurePayloadObject(msg);
+
+      let from = payload.from_dirno !== undefined ? payload.from_dirno : payload.fromDirno;
+      if (from === undefined) {
+        from = payload.fromdirno;
+      }
+      if (from === undefined || from === null || from === "") {
+        from = node.fromDirno;
+      }
+
+      let to = payload.to_dirno !== undefined ? payload.to_dirno : payload.toDirno;
+      if (to === undefined) {
+        to = payload.todirno;
+      }
+      if (to === undefined || to === null || to === "") {
+        to = node.toDirno;
+      }
+
+      let state = payload.state;
+      if (state === undefined || state === null || state === "") {
+        state = node.state;
+      }
+
+      let verbose = payload.verbose;
+      if (verbose === undefined || verbose === null || verbose === "") {
+        verbose = node.verbose;
+      }
+
+      if (from !== undefined && from !== null) {
+        from = String(from).trim();
+        if (from === "") from = undefined;
+      }
+
+      if (to !== undefined && to !== null) {
+        to = String(to).trim();
+        if (to === "") to = undefined;
+      }
+
+      if (state !== undefined && state !== null) {
+        state = String(state).trim();
+        if (state === "" || state.toLowerCase() === "all" || state === "*") {
+          state = undefined;
+        }
+      }
+
+      if (verbose !== undefined && verbose !== null && verbose !== "") {
+        if (typeof verbose === "string") {
+          verbose = verbose.trim().toLowerCase();
+          if (verbose === "true" || verbose === "yes" || verbose === "1") {
+            verbose = true;
+          } else if (verbose === "false" || verbose === "no" || verbose === "0") {
+            verbose = false;
+          } else {
+            verbose = undefined;
+          }
+        } else {
+          verbose = Boolean(verbose);
+        }
+      } else if (verbose === "") {
+        verbose = undefined;
+      }
+
+      let callPayload;
+      if (from || to || state || verbose !== undefined) {
+        callPayload = {};
+        if (from) callPayload.from_dirno = from;
+        if (to) callPayload.to_dirno = to;
+        if (state) callPayload.state = state;
+        if (verbose !== undefined) callPayload.verbose = verbose;
+      }
+
+      const callMessage = wrapWampCallPayload(callPayload); 
+      const result = node.wampClient.callProcedure(node.procedure, callMessage);
+
+      handleWampCallResult(result, node, msg, send, done);
+    });
+
+    this.on("close", function (done) {
+      if (this.clientNode) this.clientNode.close(done);
+      else done();
+    });
+  }
+
+  RED.nodes.registerType("Zenitel Current Calls", ZenitelCurrentCallsRequest);
+
+  
+  //-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Request|7|  Node for requesting current call queues	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//-------------------------------------------------------------------------------------------------------------------
+function ZenitelCallQueueRequest(config) {
+    RED.nodes.createNode(this, config);
+    this.router = config.router;
+    this.procedure = "com.zenitel.call_queues"; 
+    this.queue_dirno = config.queue_dirno;
+    this.clientNode = RED.nodes.getNode(this.router);
+
+    if (!this.clientNode) {
+      RED.log.error("wamp client config is missing!");
+      return;
+    }
+
+    const node = this;
+    node.wampClient = this.clientNode.wampClient();
+
+    this.clientNode.on("ready", function () {
+      node.status({ fill: "green", shape: "dot", text: "node-red:common.status.connected" });
+    });
+    this.clientNode.on("closed", function () {
+      node.status({ fill: "red", shape: "ring", text: "node-red:common.status.not-connected" });
+    });
+
+    node.on("input", function (msg, send, done) {
+      send = send || node.send;
+
+      const payload = ensurePayloadObject(msg);
+
+      let queue_dirno = payload.queue_dirno;
+      if (!queue_dirno) {
+        queue_dirno = payload.queue_dirno;
+      }
+      if (!queue_dirno) {
+        queue_dirno = node.queue_dirno;
+      }
+
+      if (queue_dirno !== undefined && queue_dirno !== null) {
+        queue_dirno = String(queue_dirno).trim();
+        if (queue_dirno === "") {
+          queue_dirno = undefined;
+        }
+      }
+
+      const callPayload = queue_dirno ? { queue_dirno: queue_dirno } : undefined;
+      const callMessage = wrapWampCallPayload(callPayload); 
+      const result = node.wampClient.callProcedure(node.procedure, callMessage);
+
+      handleWampCallResult(result, node, msg, send, done);
+    });
+
+    this.on("close", function (done) {
+      if (this.clientNode) this.clientNode.close(done);
+      else done();
+    });
+  }
+
+  RED.nodes.registerType("Zenitel Current Call Queues", ZenitelCallQueueRequest);
+
+  //-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|9| Generic Zenitel WAMP call node	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+    function ZenitelWAMPRequest(config) {
+        RED.nodes.createNode(this, config);
+        this.router = config.router;
+        this.procedure = config.procedure;
+
+        this.clientNode = RED.nodes.getNode(this.router)
+
+        if (this.clientNode) {
+            var node = this;
+            node.wampClient = this.clientNode.wampClient();
+
+            this.clientNode.on("ready", function () {
+                node.status({fill:"green",shape:"dot",text:"node-red:common.status.connected"});
+            });
+            this.clientNode.on("closed", function () {
+                node.status({fill:"red",shape:"ring",text:"node-red:common.status.not-connected"});
+            });
+
+            node.on("input", function (msg, send, done) {
+                send = send || node.send;
+
+                const payload = ensurePayloadObject(msg);
+                const callMessage = wrapWampCallPayload(payload);
+
+                const result = node.wampClient.callProcedure(node.procedure, callMessage);
+                handleWampCallResult(result, node, msg, send, done);
+            });
+        } else {
+            RED.log.error("wamp client config is missing!");
+        }
+
+        this.on("close", function(done) {
+            if (this.clientNode) {
+                this.clientNode.close(done);
+            } else {
+                done();
+            }
+        });
+    }
+    RED.nodes.registerType("Zenitel WAMP Request", ZenitelWAMPRequest);
+
+
+
     function WampClientSubscribe(config)
 	{
         RED.nodes.createNode(this, config);
@@ -276,6 +2374,173 @@ module.exports = function (RED) {
     }
     RED.nodes.registerType("wamp subs", WampClientSubscribe);
 	
+    //-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Request|8|  Node for requesting current GPO state	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//-------------------------------------------------------------------------------------------------------------------
+function ZenitelGPORequest(config) {
+    RED.nodes.createNode(this, config);
+    this.router = config.router;
+    this.procedure = "com.zenitel.devices.device.gpos"; 
+    this.dirno = config.device_id || config.dirno; 
+    this.gpo_id = config.gpo_id || config.id;
+    this.clientNode = RED.nodes.getNode(this.router);
+
+    
+     if (!this.clientNode) {
+      RED.log.error("wamp client config is missing!");
+      return;
+    }
+
+    const node = this;
+    node.wampClient = this.clientNode.wampClient();
+
+    this.clientNode.on("ready", function () {
+      node.status({ fill: "green", shape: "dot", text: "node-red:common.status.connected" });
+    });
+    this.clientNode.on("closed", function () {
+      node.status({ fill: "red", shape: "ring", text: "node-red:common.status.not-connected" });
+    });
+
+    node.on("input", function (msg, send, done) {
+      send = send || node.send;
+
+      const payload = ensurePayloadObject(msg);
+
+      assignConfigValue(payload, node.dirno, ["dirno", "device_id"]);
+      assignConfigValue(payload, node.gpo_id, ["id", "gpo_id"]);
+      syncAliases(payload, ["dirno", "device_id"]);
+      syncAliases(payload, ["id", "gpo_id"]);
+
+      let dirno = payload.dirno;
+      if (dirno !== undefined && dirno !== null) {
+        dirno = String(dirno).trim();
+        if (dirno === "") {
+          dirno = undefined;
+        }
+      }
+
+      let outputId = payload.id;
+      if (outputId !== undefined && outputId !== null) {
+        outputId = String(outputId).trim();
+        if (outputId === "" || outputId === "*" || outputId.toLowerCase() === "all") {
+          outputId = undefined;
+        }
+      }
+
+      if (!dirno) {
+        reportMissing(node, msg, send, done, ["dirno"]);
+        return;
+      }
+
+      const callPayload = {
+        dirno: dirno
+      };
+
+      if (outputId) {
+        callPayload.id = outputId;
+      }
+
+      const callMessage = wrapWampCallPayload(callPayload); 
+      const result = node.wampClient.callProcedure(node.procedure, callMessage);
+
+      handleWampCallResult(result, node, msg, send, done);
+    });
+
+    this.on("close", function (done) {
+      if (this.clientNode) this.clientNode.close(done);
+      else done();
+    });
+  }
+
+
+
+
+  RED.nodes.registerType("Zenitel GPO Request", ZenitelGPORequest);
+
+  //-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Request|9|  Node for requesting current GPI state	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//-------------------------------------------------------------------------------------------------------------------
+function ZenitelGPIRequest(config) {
+    RED.nodes.createNode(this, config);
+    this.router = config.router;
+    this.procedure = "com.zenitel.devices.device.gpis"; 
+    this.dirno = config.device_id || config.dirno; 
+    this.gpi_id = config.gpi_id || config.id;
+    this.clientNode = RED.nodes.getNode(this.router);
+
+    
+     if (!this.clientNode) {
+      RED.log.error("wamp client config is missing!");
+      return;
+    }
+
+    const node = this;
+    node.wampClient = this.clientNode.wampClient();
+
+    this.clientNode.on("ready", function () {
+      node.status({ fill: "green", shape: "dot", text: "node-red:common.status.connected" });
+    });
+    this.clientNode.on("closed", function () {
+      node.status({ fill: "red", shape: "ring", text: "node-red:common.status.not-connected" });
+    });
+
+    node.on("input", function (msg, send, done) {
+      send = send || node.send;
+
+      const payload = ensurePayloadObject(msg);
+
+      assignConfigValue(payload, node.dirno, ["dirno", "device_id"]);
+      assignConfigValue(payload, node.gpi_id, ["id", "gpi_id"]);
+      syncAliases(payload, ["dirno", "device_id"]);
+      syncAliases(payload, ["id", "gpi_id"]);
+
+      let dirno = payload.dirno;
+      if (dirno !== undefined && dirno !== null) {
+        dirno = String(dirno).trim();
+        if (dirno === "") {
+          dirno = undefined;
+        }
+      }
+
+      let outputId = payload.id;
+      if (outputId !== undefined && outputId !== null) {
+        outputId = String(outputId).trim();
+        if (outputId === "" || outputId === "*" || outputId.toLowerCase() === "all") {
+          outputId = undefined;
+        }
+      }
+
+      if (!dirno) {
+        reportMissing(node, msg, send, done, ["dirno"]);
+        return;
+      }
+
+      const callPayload = {
+        dirno: dirno
+      };
+
+      if (outputId) {
+        callPayload.id = outputId;
+      }
+
+      const callMessage = wrapWampCallPayload(callPayload); 
+      const result = node.wampClient.callProcedure(node.procedure, callMessage);
+
+      handleWampCallResult(result, node, msg, send, done);
+    });
+
+    this.on("close", function (done) {
+      if (this.clientNode) this.clientNode.close(done);
+      else done();
+    });
+  }
+
+
+
+
+  RED.nodes.registerType("Zenitel GPI Request", ZenitelGPIRequest);
 //-------------------------------------------------------------------------------------------------------------------	
 	
 	async function GetToken(id, passw, address)
@@ -356,10 +2621,28 @@ module.exports = function (RED) {
                             _connecting: false,
                             _connected: false,
                             _closing: false,
-                            _subscribeReqMap: {},
-                            _subscribeMap: {},
+                            _subscribeReqMap: {}, // topic -> [handlers]
+                            _subscribeFanout: {},  // topic -> fanout handler
+                            _subscribeMap: {},     // topic -> subscription/promise
                             _procedureReqMap: {},
                             _procedureMap: {},
+                            _getFanout: function (topic) {
+                                if (!this._subscribeFanout[topic]) {
+                                    var self = this;
+                                    this._subscribeFanout[topic] = function (args, kwargs) {
+                                        var handlers = self._subscribeReqMap[topic] || [];
+                                        var ctx = this; // preserve Autobahn subscription context for handlers expecting this.topic
+                                        handlers.forEach(function (handler) {
+                                            try {
+                                                handler.call(ctx, args, kwargs);
+                                            } catch (err) {
+                                                RED.log.warn("wamp subscriber handler error for topic [" + topic + "]: " + (err && err.stack ? err.stack : err));
+                                            }
+                                        });
+                                    };
+                                }
+                                return this._subscribeFanout[topic];
+                            },
                             on: function (a, b) {
                                 this._emitter.on(a, b);
                             },
@@ -382,25 +2665,17 @@ module.exports = function (RED) {
                             },
                             subscribe: function (topic, handler) {
                                 RED.log.debug("add to wamp subscribe request for topic: " + topic);
-                                this._subscribeReqMap[topic] = handler;
+                                if (!this._subscribeReqMap[topic]) {
+                                    this._subscribeReqMap[topic] = [];
+                                }
+                                this._subscribeReqMap[topic].push(handler);
 
-                                if (this._connected && this.wampSession) {
-                                    this._subscribeMap[topic] = this.wampSession.subscribe(topic, handler);
+                                if (this._connected && this.wampSession && !this._subscribeMap[topic]) {
+                                    var fanout = this._getFanout(topic);
+                                    this._subscribeMap[topic] = this.wampSession.subscribe(topic, fanout);
                                 }
                             },
-                            // unsubscribe: function (topic) {
-                                // if (this._subscribeReqMap[topic]) {
-                                //     delete this._subscribeReqMap[topic];
-                                // }
-                                //
-                                // if (this._subscribeMap[topic]) {
-                                //     if (this.wampSession) {
-                                //         this.wampSession.unsubscribe(this._subscribeMap[topic]);
-                                //         RED.log.info("unsubscribed wamp topic: ", topic);
-                                //     }
-                                //     delete this._subscribeMap[topic];
-                                // }
-                            // },
+                           
                             registerProcedure: function (procedure, handler) {
                                 RED.log.debug("add to wamp request for procedure: " + procedure);
                                 this._procedureReqMap[procedure] = handler;
@@ -410,25 +2685,29 @@ module.exports = function (RED) {
                                 }
                             },
                             callProcedure: function (procedure, message) {
-                                if (this.wampSession)
-								{
-                                    RED.log.debug("wamp call: procedure=" + procedure + ", message=" + JSON.stringify(message));
-									
-									
-									
-                                    var d = null;
-                                    if (message instanceof Object) {
-                                        d = this.wampSession.call(procedure, null, message);
-                                    } else if (Array.isArray(message)) {
-                                        d = this.wampSession.call(procedure, message);
-                                    } else {
-                                        d = this.wampSession.call(procedure, [message]);
-                                    }
-
-                                    return d;
-                                } else {
+                                if (!this.wampSession) {
                                     RED.log.warn("call failed, wamp is not connected.");
+                                    return;
                                 }
+
+                                RED.log.debug("wamp call: procedure=" + procedure + ", message=" + JSON.stringify(message));
+
+                                let d;
+                                if (message && typeof message === "object" && !Array.isArray(message) && (Object.prototype.hasOwnProperty.call(message, "args") || Object.prototype.hasOwnProperty.call(message, "kwargs"))) {
+                                    const args = Array.isArray(message.args) ? message.args : [];
+                                    const kwargs = (message.kwargs && typeof message.kwargs === "object") ? message.kwargs : {};
+                                    d = this.wampSession.call(procedure, args, kwargs);
+                                } else if (Array.isArray(message)) {
+                                    d = this.wampSession.call(procedure, message);
+                                } else if (message !== null && typeof message === "object") {
+                                    d = this.wampSession.call(procedure, [], message);
+                                } else if (message === undefined) {
+                                    d = this.wampSession.call(procedure, []);
+                                } else {
+                                    d = this.wampSession.call(procedure, [message]);
+                                }
+
+                                return d;
                             }
                         };
 
@@ -498,15 +2777,30 @@ module.exports = function (RED) {
 
                                 obj._subscribeMap = {};
                                 for (var topic in obj._subscribeReqMap) {
-                                    obj.wampSession.subscribe(topic, obj._subscribeReqMap[topic]).then(
-                                        function (subscription) {
-                                            obj._subscribeMap[topic] = subscription;
-                                            RED.log.debug("wamp subscribe topic [" +topic + "] success.");
-                                        },
-                                        function (err) {
-                                            RED.log.warn("wamp subscribe topic ["+topic+"] failed: " + err);
-                                        }
-                                    )
+                                    (function (subTopic) {
+                                        var fanout = obj._getFanout(subTopic);
+                                        obj.wampSession.subscribe(subTopic, fanout).then(
+                                            function (subscription) {
+                                                obj._subscribeMap[subTopic] = subscription;
+                                                RED.log.debug("wamp subscribe topic [" + subTopic + "] success.");
+                                            },
+                                            function (err) {
+                                                var errDetails = "";
+                                                if (err) {
+                                                    if (err.error || err.message) {
+                                                        errDetails = err.error || err.message;
+                                                    } else {
+                                                        try {
+                                                            errDetails = JSON.stringify(err);
+                                                        } catch (stringifyErr) {
+                                                            errDetails = String(err);
+                                                        }
+                                                    }
+                                                }
+                                                RED.log.warn("wamp subscribe topic ["+subTopic+"] failed: " + errDetails);
+                                            }
+                                        );
+                                    }(topic));
                                 }
 
                                 obj._procedureMap = {};
@@ -517,7 +2811,19 @@ module.exports = function (RED) {
                                             RED.log.debug("wamp register procedure [" + procedure + "] success.");
                                         },
                                         function (err) {
-                                            RED.log.warn("wamp register procedure ["+procedure+"] failed: " + err.error);
+                                            var regErrDetails = "";
+                                            if (err) {
+                                                if (err.error || err.message) {
+                                                    regErrDetails = err.error || err.message;
+                                                } else {
+                                                    try {
+                                                        regErrDetails = JSON.stringify(err);
+                                                    } catch (stringifyErr) {
+                                                        regErrDetails = String(err);
+                                                    }
+                                                }
+                                            }
+                                            RED.log.warn("wamp register procedure ["+procedure+"] failed: " + regErrDetails);
                                         }
                                     )
                                 }
@@ -560,3 +2866,4 @@ module.exports = function (RED) {
         }
     }());
 }
+
