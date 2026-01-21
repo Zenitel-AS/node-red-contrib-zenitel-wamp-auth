@@ -14,6 +14,8 @@ module.exports = function (RED) {
 
 	tls.DEFAULT_MIN_VERSION = "TLSv1.2";
 	tls.DEFAULT_MAX_VERSION = "TLSv1.3";
+
+    const DEFAULT_WAMP_PORT = "8086";
     function wrapWampCallPayload(payload) {
         if (payload && typeof payload === "object" && !Array.isArray(payload)) {
             const kwargs = Object.assign({}, payload);
@@ -121,14 +123,15 @@ module.exports = function (RED) {
   function WampClientNode(config) {
     RED.nodes.createNode(this, config);
 
-    // Build full address from IP + Port (both required in HTML defaults)
-    let ip = config.ip || "";
-    let port = config.port || "";
+    // Port is fixed server-side; only IP is configurable.
+    const ip = config.ip || "";
+    const port = DEFAULT_WAMP_PORT;
     this.address = "wss://" + ip + ":" + port;
 
     this.realm = "zenitel";
     this.authId = config.authId;
     this.password = config.password;
+    this.port = port;
 
     this.wampClient = function () {
         return wampClientPool.get(this.address, this.realm, this.authId, this.password);
@@ -139,7 +142,7 @@ module.exports = function (RED) {
     };
 
     this.close = function (done) {
-        wampClientPool.close(this.address, this.realm, done);
+        wampClientPool.close(this.address, this.realm, this.authId, this.password, done);
     };
 }
 
@@ -2543,7 +2546,7 @@ function ZenitelGPIRequest(config) {
   RED.nodes.registerType("Zenitel GPI Request", ZenitelGPIRequest);
 //-------------------------------------------------------------------------------------------------------------------	
 	
-	async function GetToken(id, passw, address)
+    async function GetToken(id, passw, address)
 	{
 		RED.log.info("GetToken.");
 
@@ -2597,6 +2600,11 @@ function ZenitelGPIRequest(config) {
 		{
 				RED.log.info("GetToken fails.");
 		}
+
+        if (!_token) {
+            throw new Error("GetToken did not return access_token");
+        }
+
 		return _token;	
 	}
 
@@ -2606,9 +2614,18 @@ function ZenitelGPIRequest(config) {
     var wampClientPool = (function ()
 	{
         var connections = {};
+        function buildKey(address, realm, authid, password) {
+            return [realm || "", address || "", authid || "", password || ""].join("|");
+        }
         return {
             get: function (address, realm, authid, password) {
-                var uri = realm + "@" + address;
+                var uri = buildKey(address, realm, authid, password);
+
+                if (connections[uri] && connections[uri]._authFailed) {
+                    connections[uri]._closing = true;
+                    connections[uri].close();
+                    delete connections[uri];
+                }
 
                 if (!connections[uri])
 				{
@@ -2621,11 +2638,17 @@ function ZenitelGPIRequest(config) {
                             _connecting: false,
                             _connected: false,
                             _closing: false,
+                            _authFailed: false,
                             _subscribeReqMap: {}, // topic -> [handlers]
                             _subscribeFanout: {},  // topic -> fanout handler
                             _subscribeMap: {},     // topic -> subscription/promise
                             _procedureReqMap: {},
                             _procedureMap: {},
+                            _address: address,
+                            _realm: realm,
+                            _authid: authid,
+                            _password: password,
+                            _poolKey: uri,
                             _getFanout: function (topic) {
                                 if (!this._subscribeFanout[topic]) {
                                     var self = this;
@@ -2713,15 +2736,17 @@ function ZenitelGPIRequest(config) {
 
                         var _disconnect = function() {
                             if (obj.wampConnection) {
+                                obj._closing = true;
                                 obj.wampConnection.close();
                             }
                         };
 
                         var setupWampClient = function () {
+                            obj._authFailed = false;
                             obj._connecting = true;
                             obj._connected = false;
                             obj._emitter.emit("closed");
-													
+														
 //EM							RED.log.info("WampClientPool: authid: " + authid + ". password: " + password + ". url: " + address);
 							
 							var encrypt  = address.includes("wss");
@@ -2732,8 +2757,8 @@ function ZenitelGPIRequest(config) {
 								var options = {
 									url: address,
 									realm: realm,
-									retry_if_unreachable: true,
-									max_retries: -1,
+									retry_if_unreachable: false,
+									max_retries: 0,
 									authmethods: ['ticket'],
 									authid: authid,
 									key: "", //fs.readFileSync('ZenitelConnectPrivateKey.key', 'utf8'),
@@ -2742,8 +2767,15 @@ function ZenitelGPIRequest(config) {
 									rejectUnauthorized: false,
 									onchallenge: function ()
 									{																
-										var token = GetToken(authid, password, address);
-										return token;
+										return GetToken(authid, password, address).catch(function (err) {
+                                            obj._authFailed = true;
+                                            obj._closing = true;
+                                            obj._emitter.emit("closed");
+                                            if (obj.wampConnection) {
+                                                try { obj.wampConnection.close(); } catch (e) {}
+                                            }
+                                            throw err;
+                                        });
 									}
 								};
 							}
@@ -2752,14 +2784,21 @@ function ZenitelGPIRequest(config) {
 								var options = {
 									url: address,
 									realm: realm,
-									retry_if_unreachable: true,
-									max_retries: -1,
+									retry_if_unreachable: false,
+									max_retries: 0,
 									authmethods: ['ticket'],
 									authid: authid,
 									onchallenge: function ()
 									{																
-										var token = GetToken(authid, password, address);
-										return token;
+										return GetToken(authid, password, address).catch(function (err) {
+                                            obj._authFailed = true;
+                                            obj._closing = true;
+                                            obj._emitter.emit("closed");
+                                            if (obj.wampConnection) {
+                                                try { obj.wampConnection.close(); } catch (e) {}
+                                            }
+                                            throw err;
+                                        });
 									}
 								};
 
@@ -2834,12 +2873,17 @@ function ZenitelGPIRequest(config) {
                             obj.wampConnection.onclose = function (reason, details) {
                                 obj._connecting = false;
                                 obj._connected = false;
+                                var stopRetry = obj._closing || obj._authFailed;
                                 if (!obj._closing) {
                                     // RED.log.error("unexpected close", {uri:uri});
                                     obj._emitter.emit("closed");
                                 }
                                 obj._subscribeMap = {};
                                 RED.log.info("wamp client closed");
+                                delete connections[uri];
+                                if (stopRetry) {
+                                    return false;
+                                }
                             };
 
                             obj.wampConnection.open();
@@ -2851,8 +2895,8 @@ function ZenitelGPIRequest(config) {
                 }
                 return connections[uri];
             },
-            close: function (address, realm, done) {
-                var uri = realm + "@" + address;
+            close: function (address, realm, authid, password, done) {
+                var uri = buildKey(address, realm, authid, password);
                 if (connections[uri]) {
                     RED.log.info("ready to close wamp client [" + uri +"]");
                     connections[uri]._closing = true;
@@ -2866,4 +2910,3 @@ function ZenitelGPIRequest(config) {
         }
     }());
 }
-

@@ -4,7 +4,7 @@ Custom Node-RED nodes inside `zenitel-wamp-authLWE.js` expose Zenitel intercom f
 
 ## Connection & Authentication
 
-- Use the `wamp-client` configuration node to define target **IP**, **port**, **authId** and **password**. The node always connects to `wss://<ip>:<port>` on realm `zenitel`.
+- Use the `wamp-client` configuration node to define target **IP**, **authId** and **password**. The WAMP port is fixed to `8086` and the node always connects to `wss://<ip>:8086` on realm `zenitel`.
 - TLS 1.2-1.3 is enforced and `NODE_TLS_REJECT_UNAUTHORIZED` is set to `0`, so self-signed Zenitel certificates are accepted.
 - Ticket authentication is implemented by `GetToken()`, which performs an HTTPS `POST /api/auth/login` call using HTTP Basic credentials and injects the returned `access_token` in the WAMP `onchallenge` handler.
 - Connections are pooled by `wampClientPool`, so multiple nodes reuse the same Autobahn session; closing a configuration node tears down its pooled session.
@@ -118,5 +118,4 @@ Most event nodes keep their node status indicator green while the pooled connect
 - When a field is missing, the node adds a human-readable string to `msg.error`. Consider wiring Debug nodes to both the `msg.payload` and `msg.error` paths.
 - Because TLS validation is disabled, always restrict Node-RED access; otherwise credentials could be intercepted by a man-in-the-middle.
 - Reuse `Zenitel WAMP Out` / `Zenitel WAMP Request` before adding new specialised nodes - the helper functions already perform aliasing and validation, so you get consistent behaviour.
-
 

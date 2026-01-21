@@ -2592,9 +2592,7 @@
     <div class="form-row node-input-router">
         <label for="node-config-input-ip" style="margin-left: 15px; width: 200px;"><i class="fa fa-globe"></i> Zenitel Connect Pro IP: </label>
         <input type="text" id="node-config-input-ip" placeholder="192.168.1.42" style="width: 45%;">
-        <br>
-        <label for="node-config-input-port" style="margin-left: 15px; width: 200px;"><i class="fa fa-globe"></i> WAMP Port: </label>
-        <input type="text" id="node-config-input-port" placeholder="8086" style="width: 45%;">
+        <input type="hidden" id="node-config-input-port" value="8086">
         <br>
         <label for="node-config-input-authId" style="margin-left: 15px; width: 200px;"><i class="fa fa-id-badge"></i> <span data-i18n="wamp.label.authId"></span> Zenitel Link Username:</label>
         <input type="text" id="node-config-input-authId" data-i18n="[placeholder]wamp.placeholder.authId" style="width: 45%;">
@@ -2602,6 +2600,8 @@
         <label for="node-config-input-password" style="margin-left: 15px; width: 200px;"><i class="fa fa-id-badge"></i> <span data-i18n="wamp.label.password"></span> Zenitel Link Password:</label>
         <input type="password" id="node-config-input-password" data-i18n="[placeholder]wamp.placeholder.password" style="width: 45%;">
     </div>
+
+   
 
     <div class="form-row">
         <label for="node-config-input-name"><i class="fa fa-tag"></i> <span
@@ -2616,7 +2616,7 @@
    <p>The properties are as follows:
    <ul>
    <li><code>Zenitel Connect Pro IP Address:</code> is the IP address of the Zenitel Connect Pro server.</li>
-   <li><code>WAMP Port:</code> is the port number used for the WAMP connection.</li>
+   <li><code>WAMP Port:</code> fixed to <code>8086</code>; no user input is needed.</li>
    <li><code>Zenitel Link Username:</code> is the username for the Zenitel Link.</li>
    <li><code>Zenitel Link Password:</code> is the password for the Zenitel Link.</li>   
    </ul>
@@ -2628,13 +2628,17 @@
         category: 'config',   // the palette category
         defaults: {           // defines the editable properties of the node
             ip:      { value: "", required: true },
-            port:    { value: "", required: true },
+            port:    { value: "8086" },
             authId:  { value: "", required: true },
             password:{ value: "", required: true },
             name:    { value: "" }
         },
+        oneditprepare: function() {
+            $("#node-config-input-port").val("8086");
+        },
         label: function() {   // sets the default label contents
-            return (this.name ? this.name : (this.ip + ":" + this.port));
+            var port = "8086";
+            return (this.name ? this.name : (this.ip + ":" + port));
         }
     });
 </script>
