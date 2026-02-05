@@ -118,6 +118,42 @@ module.exports = function (RED) {
         if (done) done(text);
     }
 
+    async function restFetchGpioList(kind, dirno, clientNode) {
+        // kind: "gpis" or "gpos"
+        const address = clientNode.address || "";
+        const encrypt = address.includes("wss");
+        const addrParts = address.split(":"); // e.g., ["wss", "//10.0.0.5", "8086"]
+        const ip = (addrParts[1] || "").replace("//", "");
+        const base = encrypt ? "https://" + ip + ":443" : "http://" + ip + ":80";
+        const path = "/api/devices/device;dirno=" + encodeURIComponent(dirno) + "/" + kind;
+
+        const token = await GetToken(clientNode.authId, clientNode.password, address);
+
+        const resp = await fetch(base + path, {
+            method: "GET",
+            headers: {
+                "accept": "application/json",
+                "Authorization": "Bearer " + token
+            }
+        });
+
+        let body;
+        try {
+            body = await resp.json();
+        } catch (e) {
+            body = null;
+        }
+
+        if (!resp.ok) {
+            const err = new Error("REST " + kind + " fetch failed (" + resp.status + ")");
+            err.status = resp.status;
+            err.body = body;
+            throw err;
+        }
+
+        return body;
+    }
+
 //-------------------------------------------------------------------------------------------------------------------
 
   function WampClientNode(config) {
@@ -2424,11 +2460,22 @@ function ZenitelGPORequest(config) {
       }
 
       let outputId = payload.id;
+      // fallback to config value
+      if (outputId === undefined) {
+        outputId = node.gpo_id;
+      }
+      let requestAll = false;
       if (outputId !== undefined && outputId !== null) {
         outputId = String(outputId).trim();
-        if (outputId === "" || outputId === "*" || outputId.toLowerCase() === "all") {
+        if (outputId === "" || outputId.toLowerCase() === "all") {
+          requestAll = true;
+          outputId = undefined; // omit to request all
+        } else if (outputId === "*") {
+          requestAll = true;
           outputId = undefined;
         }
+      } else {
+        requestAll = true;
       }
 
       if (!dirno) {
@@ -2440,14 +2487,31 @@ function ZenitelGPORequest(config) {
         dirno: dirno
       };
 
-      if (outputId) {
+      if (outputId !== undefined && outputId !== null) {
         callPayload.id = outputId;
       }
 
-      const callMessage = wrapWampCallPayload(callPayload); 
-      const result = node.wampClient.callProcedure(node.procedure, callMessage);
+      if (requestAll) {
+        (async () => {
+          try {
+            const data = await restFetchGpioList("gpos", dirno, node.clientNode);
+            msg.payload = data;
+            send(msg);
+            if (done) done();
+          } catch (err) {
+            const em = (err && (err.message || err.error)) ? (err.message || err.error) : String(err);
+            node.error(em, msg);
+            msg.error = em;
+            send(msg);
+            if (done) done(err);
+          }
+        })();
+      } else {
+        const callMessage = wrapWampCallPayload(callPayload); 
+        const result = node.wampClient.callProcedure(node.procedure, callMessage);
 
-      handleWampCallResult(result, node, msg, send, done);
+        handleWampCallResult(result, node, msg, send, done);
+      }
     });
 
     this.on("close", function (done) {
@@ -2508,11 +2572,21 @@ function ZenitelGPIRequest(config) {
       }
 
       let outputId = payload.id;
+      if (outputId === undefined) {
+        outputId = node.gpi_id;
+      }
+      let requestAll = false;
       if (outputId !== undefined && outputId !== null) {
         outputId = String(outputId).trim();
-        if (outputId === "" || outputId === "*" || outputId.toLowerCase() === "all") {
+        if (outputId === "" || outputId.toLowerCase() === "all") {
+          requestAll = true;
+          outputId = undefined;
+        } else if (outputId === "*") {
+          requestAll = true;
           outputId = undefined;
         }
+      } else {
+        requestAll = true;
       }
 
       if (!dirno) {
@@ -2524,14 +2598,31 @@ function ZenitelGPIRequest(config) {
         dirno: dirno
       };
 
-      if (outputId) {
+      if (outputId !== undefined && outputId !== null) {
         callPayload.id = outputId;
       }
 
-      const callMessage = wrapWampCallPayload(callPayload); 
-      const result = node.wampClient.callProcedure(node.procedure, callMessage);
+      if (requestAll) {
+        (async () => {
+          try {
+            const data = await restFetchGpioList("gpis", dirno, node.clientNode);
+            msg.payload = data;
+            send(msg);
+            if (done) done();
+          } catch (err) {
+            const em = (err && (err.message || err.error)) ? (err.message || err.error) : String(err);
+            node.error(em, msg);
+            msg.error = em;
+            send(msg);
+            if (done) done(err);
+          }
+        })();
+      } else {
+        const callMessage = wrapWampCallPayload(callPayload); 
+        const result = node.wampClient.callProcedure(node.procedure, callMessage);
 
-      handleWampCallResult(result, node, msg, send, done);
+        handleWampCallResult(result, node, msg, send, done);
+      }
     });
 
     this.on("close", function (done) {
@@ -2576,7 +2667,9 @@ function ZenitelGPIRequest(config) {
 		
 		RED.log.info("WampClientPool: url: " + _url);
 			
-		let response = await fetch(_url,
+		let response;
+		try {
+			response = await fetch(_url,
 										{
 										  method: "POST",
 										  headers:
@@ -2587,6 +2680,12 @@ function ZenitelGPIRequest(config) {
 											"Authorization" : "Basic " + encoded,
 										  },
 										});
+		} catch (e) {
+			// network-level error (e.g., host down). Preserve status if present.
+			e.status = e.status || undefined;
+			throw e;
+		}
+
 		let json_object = await response.json();
 
 		if (response.ok)
@@ -2598,7 +2697,9 @@ function ZenitelGPIRequest(config) {
 		}
 		else
 		{
-				RED.log.info("GetToken fails.");
+				var err = new Error("GetToken fails. HTTP status " + response.status);
+				err.status = response.status;
+				throw err;
 		}
 
         if (!_token) {
@@ -2639,6 +2740,9 @@ function ZenitelGPIRequest(config) {
                             _connected: false,
                             _closing: false,
                             _authFailed: false,
+                            _reconnectTimer: null,
+                            _retryAttempt: 0,
+                            _connectWatchdog: null,
                             _subscribeReqMap: {}, // topic -> [handlers]
                             _subscribeFanout: {},  // topic -> fanout handler
                             _subscribeMap: {},     // topic -> subscription/promise
@@ -2735,16 +2839,61 @@ function ZenitelGPIRequest(config) {
                         };
 
                         var _disconnect = function() {
+                            if (obj._reconnectTimer) {
+                                clearTimeout(obj._reconnectTimer);
+                                obj._reconnectTimer = null;
+                            }
+                            if (obj._connectWatchdog) {
+                                clearTimeout(obj._connectWatchdog);
+                                obj._connectWatchdog = null;
+                            }
                             if (obj.wampConnection) {
                                 obj._closing = true;
                                 obj.wampConnection.close();
                             }
                         };
 
+                        var scheduleReconnect = function (details) {
+                            if (obj._closing || obj._authFailed) {
+                                RED.log.debug("wamp client reconnect skipped (closing/authFailed)");
+                                return;
+                            }
+                            var delaySeconds = 1.5;
+                            if (details && typeof details.retry_delay === "number" && isFinite(details.retry_delay)) {
+                                delaySeconds = details.retry_delay;
+                            } else {
+                                // simple backoff capped at 10 seconds
+                                delaySeconds = Math.min(10, 1.5 * Math.pow(1.5, obj._retryAttempt));
+                            }
+                            obj._retryAttempt += 1;
+                            var delayMs = delaySeconds * 1000;
+                            if (obj._reconnectTimer) {
+                                clearTimeout(obj._reconnectTimer);
+                            }
+                            RED.log.debug("wamp client reconnect scheduled in " + delayMs + " ms (attempt " + (obj._retryAttempt+1) + ")");
+                            obj._reconnectTimer = setTimeout(function () {
+                                obj._reconnectTimer = null;
+                                obj._connecting = false; // allow new connect attempt
+                                RED.log.debug("wamp client reconnect firing attempt " + obj._retryAttempt);
+                                setupWampClient();
+                            }, delayMs);
+                        };
+
                         var setupWampClient = function () {
+                            if (obj._reconnectTimer) {
+                                clearTimeout(obj._reconnectTimer);
+                                obj._reconnectTimer = null;
+                            }
+                            if (obj._connectWatchdog) {
+                                clearTimeout(obj._connectWatchdog);
+                                obj._connectWatchdog = null;
+                            }
+                            RED.log.debug("wamp client connecting (attempt " + (obj._retryAttempt+1) + ")");
+                            obj._closing = false;
                             obj._authFailed = false;
                             obj._connecting = true;
                             obj._connected = false;
+                            // keep retryAttempt to grow backoff
                             obj._emitter.emit("closed");
 														
 //EM							RED.log.info("WampClientPool: authid: " + authid + ". password: " + password + ". url: " + address);
@@ -2757,7 +2906,7 @@ function ZenitelGPIRequest(config) {
 								var options = {
 									url: address,
 									realm: realm,
-									retry_if_unreachable: false,
+									retry_if_unreachable: false, // external retry loop handles reconnects
 									max_retries: 0,
 									authmethods: ['ticket'],
 									authid: authid,
@@ -2768,8 +2917,10 @@ function ZenitelGPIRequest(config) {
 									onchallenge: function ()
 									{																
 										return GetToken(authid, password, address).catch(function (err) {
-                                            obj._authFailed = true;
-                                            obj._closing = true;
+                                            var status = err && err.status;
+                                            // Only stop retrying on real auth errors (401/403). Network errors should keep retrying.
+                                            obj._authFailed = (status === 401 || status === 403);
+                                            obj._closing = false;
                                             obj._emitter.emit("closed");
                                             if (obj.wampConnection) {
                                                 try { obj.wampConnection.close(); } catch (e) {}
@@ -2784,15 +2935,16 @@ function ZenitelGPIRequest(config) {
 								var options = {
 									url: address,
 									realm: realm,
-									retry_if_unreachable: false,
+									retry_if_unreachable: false, // external retry loop handles reconnects
 									max_retries: 0,
 									authmethods: ['ticket'],
 									authid: authid,
 									onchallenge: function ()
 									{																
 										return GetToken(authid, password, address).catch(function (err) {
-                                            obj._authFailed = true;
-                                            obj._closing = true;
+                                            var status = err && err.status;
+                                            obj._authFailed = (status === 401 || status === 403);
+                                            obj._closing = false;
                                             obj._emitter.emit("closed");
                                             if (obj.wampConnection) {
                                                 try { obj.wampConnection.close(); } catch (e) {}
@@ -2809,9 +2961,14 @@ function ZenitelGPIRequest(config) {
                             obj.wampConnection.onopen = function (session) {
 
 //                                RED.log.info("wamp client [" + JSON.stringify(options) + "] connected.");
+                                if (obj._connectWatchdog) {
+                                    clearTimeout(obj._connectWatchdog);
+                                    obj._connectWatchdog = null;
+                                }
 
                                 obj.wampSession = session;
                                 obj._connected = true;
+                                obj._retryAttempt = 0;
                                 obj._emitter.emit("ready");
 
                                 obj._subscribeMap = {};
@@ -2871,22 +3028,42 @@ function ZenitelGPIRequest(config) {
                             };
 
                             obj.wampConnection.onclose = function (reason, details) {
+                                if (obj._connectWatchdog) {
+                                    clearTimeout(obj._connectWatchdog);
+                                    obj._connectWatchdog = null;
+                                }
                                 obj._connecting = false;
                                 obj._connected = false;
                                 var stopRetry = obj._closing || obj._authFailed;
+                                RED.log.debug("wamp client onclose stopRetry=" + stopRetry + " closing=" + obj._closing + " authFailed=" + obj._authFailed + " reason=" + reason + " details=" + JSON.stringify(details));
                                 if (!obj._closing) {
-                                    // RED.log.error("unexpected close", {uri:uri});
                                     obj._emitter.emit("closed");
                                 }
                                 obj._subscribeMap = {};
                                 RED.log.info("wamp client closed");
-                                delete connections[uri];
-                                if (stopRetry) {
-                                    return false;
+                                // If we're not explicitly closing or blocked by auth failure, drive our own reconnect timer.
+                                if (!stopRetry) {
+                                    scheduleReconnect(details);
                                 }
+                                // prevent Autobahn internal loop from logging "disabled" by explicitly disabling it
+                                if (obj.wampConnection && obj.wampConnection._retry !== undefined) {
+                                    obj.wampConnection._retry = false;
+                                }
+                                return false;
                             };
 
                             obj.wampConnection.open();
+
+                            // Watchdog: if neither open nor close fires within 10 seconds, force retry
+                            obj._connectWatchdog = setTimeout(function () {
+                                if (obj._connected) { return; }
+                                RED.log.debug("wamp client connect watchdog fired; forcing reconnect");
+                                try {
+                                    if (obj.wampConnection) { obj.wampConnection.close(); }
+                                } catch (e) {}
+                                obj._connecting = false;
+                                scheduleReconnect({});
+                            }, 10000);
                         };
 
                         setupWampClient();

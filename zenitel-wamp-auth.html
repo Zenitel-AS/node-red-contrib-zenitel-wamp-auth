@@ -736,6 +736,9 @@
 			      <option value="com.zenitel.wamp.session.on_join">WAMP Session Join</option>
 			      <option value="com.zenitel.wamp.session.on_leave">WAMP Session Leave</option>
 			      <option value="com.zenitel.system.device.extended_status">Extended Status</option>
+                  <option value="com.zenitel.public.audio_data_receiving">Audio Data Receiving-Audio analytics</option>
+                  <option value="com.zenitel.public.audio_detector_alive">Audio Detector alive-Audio analytics</option>
+                  <option value="com.zenitel.public.audio_analytics">Audio Analytics</option>
         </select>
     </div>
     <div class="form-row">
@@ -2351,7 +2354,7 @@
 	<div class="form-row">
         <label for="node-input-gpo_id" style="width: 120px;"><i class="fa fa-arrow-left"></i> <span data-i18n="wamp.label.id"> Output: </span></label>
         <select type="text" id="node-input-gpo_id" style="width:70%;">
-            <option value="">All</option>
+            <option value="*">All</option>
             <option value="gpio1">Output 1</option>
 			<option value="gpio2">Output 2</option>
 			<option value="gpio3">Output 3</option>
@@ -2396,7 +2399,7 @@
         defaults: {             // defines the editable properties of the node
             router: {type: "wamp-client", required: true},
             device_id: {value:"", required: true, validate: zenitelDirnoIsValid},
-			gpo_id: {value:""},
+			gpo_id: {value:"*"},
             name: {value:""}
         },
         color:"#ffd400",
@@ -2428,7 +2431,7 @@
 	<div class="form-row">
         <label for="node-input-gpi_id" style="width: 120px;"><i class="fa fa-arrow-left"></i> <span data-i18n="wamp.label.id"> Output: </span></label>
         <select type="text" id="node-input-gpi_id" style="width:70%;">
-            <option value="">All</option>
+            <option value="*">All</option>
             <option value="gpio1">Input 1</option>
 			<option value="gpio2">Input 2</option>
 			<option value="gpio3">Input 3</option>
@@ -2465,7 +2468,7 @@
         defaults: {             // defines the editable properties of the node
             router: {type: "wamp-client", required: true},
             device_id: {value:"", required: true, validate: zenitelDirnoIsValid},
-			gpi_id: {value:""},
+			gpi_id: {value:"*"},
             name: {value:""}
         },
         color:"#ffd400",
@@ -2502,6 +2505,8 @@
 			<option value="com.zenitel.calls">Calls</option>
 			<option value="com.zenitel.call_legs">Call Legs</option>
 			<option value="com.zenitel.call_queues">Call Queues</option>
+			<option value="com.zenitel.system.platform.version">Platform Version</option>
+    
         </select>
     </div>
     <div class="form-row">

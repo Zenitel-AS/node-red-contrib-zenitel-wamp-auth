@@ -96,8 +96,8 @@ Most event nodes keep their node status indicator green while the pooled connect
 - **Call Forwarding Request**: optional `dirno`/`fwd_type` filters. Setting `fwd_type` to `"all"` behaves the same as omitting it.
 - **Current Calls**: supports `from_dirno`, `to_dirno`, `state`, `verbose`. Blank or `"*"` removes the field from the query.
 - **Current Call Queues**: optional `queue_dirno`; blank values fetch all queues.
-- **GPO Request**: requires a device `dirno`/`device_id` and optionally narrows results to a specific output via `id`/`gpo_id`; `"*"`, `"all"`, or blank pulls every GPO for the device.
-- **GPI Request**: same pattern as GPO Request but targets inputs; `"*"`, `"all"`, or blank returns the complete list.
+- **GPO Request**: requires a device `dirno`/`device_id` and optionally narrows results to a specific output via `id`/`gpo_id`. When `id` is `"*"`, `"all"`, or blank, the node fetches all outputs via the REST API; specific IDs continue to use WAMP.
+- **GPI Request**: same pattern as GPO Request but targets inputs; `"*"`, `"all"`, or blank triggers a REST fetch of every input, while specific IDs stay on WAMP.
 - **Zenitel WAMP Request**: the request counterpart to `Zenitel WAMP Out`, handy for ad-hoc diagnostics or new API endpoints.
 
 ## Dynamic Subscribe Helper
@@ -118,4 +118,3 @@ Most event nodes keep their node status indicator green while the pooled connect
 - When a field is missing, the node adds a human-readable string to `msg.error`. Consider wiring Debug nodes to both the `msg.payload` and `msg.error` paths.
 - Because TLS validation is disabled, always restrict Node-RED access; otherwise credentials could be intercepted by a man-in-the-middle.
 - Reuse `Zenitel WAMP Out` / `Zenitel WAMP Request` before adding new specialised nodes - the helper functions already perform aliasing and validation, so you get consistent behaviour.
-
