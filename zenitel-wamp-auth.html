@@ -725,21 +725,7 @@
     </div>
     <div class="form-row">
         <label for="node-input-topic" style="width: 120px;"><i class="fa fa-envelope"></i> <span data-i18n="wamp.label.destination"> Event: </span></label>
-        <select type="text" id="node-input-topic" style="width:70%;">
-            <option value="com.zenitel.call">Call State</option>
-            <option value="com.zenitel.call_leg">Call Legs</option>
-			      <option value="com.zenitel.system.event_trigger">Event Trigger</option>
-			      <option value="com.zenitel.device.gpo">General Purpose Output</option>
-			      <option value="com.zenitel.device.gpi">General Purpose Input</option>
-			      <option value="com.zenitel.system.device_account">Device State</option>
-			      <option value="com.zenitel.system.open_door">Door Open</option>
-			      <option value="com.zenitel.wamp.session.on_join">WAMP Session Join</option>
-			      <option value="com.zenitel.wamp.session.on_leave">WAMP Session Leave</option>
-			      <option value="com.zenitel.system.device.extended_status">Extended Status</option>
-                  <option value="com.zenitel.public.audio_data_receiving">Audio Data Receiving-Audio analytics</option>
-                  <option value="com.zenitel.public.audio_detector_alive">Audio Detector alive-Audio analytics</option>
-                  <option value="com.zenitel.public.audio_analytics">Audio Analytics</option>
-        </select>
+        <input type="text" id="node-input-topic" style="width:70%;" placeholder="com.zenitel.call" list="node-input-topic-suggestions">
     </div>
     <div class="form-row">
         <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
@@ -748,7 +734,7 @@
 </script>
 
 <script type="text/x-red" data-help-name="Zenitel WAMP In">
-   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and subscribes to the event selected in the drop down.</p>
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and subscribes to the event URI entered in the Event field.</p>
    <p>The node will output the received WAMP messaged unfiltered. To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
    </p>
 </script>
@@ -1631,16 +1617,7 @@
     </div>
     <div class="form-row">
         <label for="node-input-procedure" style="width: 120px;"><i class="fa fa-envelope"></i> <span data-i18n="wamp.label.procedure"> Action: </span></label>
-		<select type="text" id="node-input-procedure" style="width:70%;">
-		    <option value="com.zenitel.system.audio_messages.post">Audio Messages</option>
-            <option value="com.zenitel.call_forwarding.post">Call Forwarding</option>
-            <option value="com.zenitel.calls.post">Calls</option>
-			<option value="com.zenitel.calls.call.open_door.post">Door Open</option>
-			<option value="com.zenitel.devices.device.gpos.gpo.post">General Purpose Output</option>
-			<option value="com.zenitel.devices.device.key.post">Key Press</option>
-			<option value="com.zenitel.system.devices.test.tone.post">Tone Test</option>
-			<option value="com.zenitel.system.devices.test.tone.post">Button Test</option>
-        </select>
+        <input type="text" id="node-input-procedure" style="width:70%;" placeholder="com.zenitel.calls.post">
     </div>
     <div class="form-row">
         <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
@@ -1650,7 +1627,7 @@
 </script>
 
 <script type="text/x-red" data-help-name="Zenitel WAMP Out">
-   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute actions chosen from the dropdown menu.</p>
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute the action URI entered in the Action field.</p>
    <p>The node needs a <code>msg.payload</code> that contains a JSON object with the information needed for the Action. To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
 </script>
 
@@ -2429,7 +2406,7 @@
         <input type="text" id="node-input-device_id" data-i18n="[placeholder]Dirno">
 	</div>
 	<div class="form-row">
-        <label for="node-input-gpi_id" style="width: 120px;"><i class="fa fa-arrow-left"></i> <span data-i18n="wamp.label.id"> Output: </span></label>
+        <label for="node-input-gpi_id" style="width: 120px;"><i class="fa fa-arrow-left"></i> <span data-i18n="wamp.label.id"> Input: </span></label>
         <select type="text" id="node-input-gpi_id" style="width:70%;">
             <option value="*">All</option>
             <option value="gpio1">Input 1</option>
@@ -2495,19 +2472,7 @@
     </div>
     <div class="form-row">
         <label for="node-input-procedure" style="width: 120px;"><i class="fa fa-envelope"></i> <span data-i18n="wamp.label.procedure"> Request: </span></label>
-		<select type="text" id="node-input-procedure" style="width:70%;">
-		    <option value="com.zenitel.system.device_accounts">Device Accounts</option>
-            <option value="com.zenitel.system.info.net_interfaces">Network interfaces</option>
-            <option value="com.zenitel.system.audio_messages">Audio Messages</option>
-			<option value="com.zenitel.groups">Groups</option>
-			<option value="com.zenitel.directory">Directory</option>
-			<option value="com.zenitel.call_forwarding">Call Forwarding</option>
-			<option value="com.zenitel.calls">Calls</option>
-			<option value="com.zenitel.call_legs">Call Legs</option>
-			<option value="com.zenitel.call_queues">Call Queues</option>
-			<option value="com.zenitel.system.platform.version">Platform Version</option>
-    
-        </select>
+        <input type="text" id="node-input-procedure" style="width:70%;" placeholder="com.zenitel.system.device_accounts">
     </div>
     <div class="form-row">
         <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
@@ -2517,7 +2482,7 @@
 </script>
 
 <script type="text/x-red" data-help-name="Zenitel WAMP Request">
-   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can request data chosen from the dropdown menu.</p>
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can request data from the URI entered in the Request field.</p>
    <p>The node returns a <code>msg.payload</code> that contains a JSON object with the information requested. To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
 </script>
 
