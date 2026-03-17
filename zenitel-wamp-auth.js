@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Zenitel Norway AS
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 module.exports = function (RED) {
     "use strict";
     var events = require("events");
@@ -1785,6 +1801,85 @@ function ZenitelAudioMessageEnd(config) {
         });
     }
     RED.nodes.registerType("Zenitel Delete Call Forwarding", ZenitelDeleteCallForwarding);
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+//--	|Action|13| Node for directly answering  calls on a Zenitel  device	-->
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+  function ZenitelCallAnswer(config) {
+    RED.nodes.createNode(this, config);
+
+    this.router    = config.router;
+    this.procedure = 'com.zenitel.calls.post';
+    this.fromdirno = config.fromdirno;
+    this.todirno   = config.todirno;
+    this.priority  = config.priority;
+
+    this.clientNode = RED.nodes.getNode(this.router);
+
+    if (this.clientNode) {
+        const node = this;
+        node.wampClient = this.clientNode.wampClient();
+
+        this.clientNode.on("ready", function () {
+            node.status({ fill: "green", shape: "dot", text: "node-red:common.status.connected" });
+        });
+        this.clientNode.on("closed", function () {
+            node.status({ fill: "red", shape: "ring", text: "node-red:common.status.not-connected" });
+        });
+
+        node.on("input", function (msg, send, done) {
+            send = send || node.send;
+
+            const payload = ensurePayloadObject(msg);
+
+                assignConfigValue(payload, node.fromdirno, ["from_dirno"]);
+                assignConfigValue(payload, node.todirno, ["to_dirno"]);
+                if (node.priority !== undefined && node.priority !== "") {
+                    payload.priority = node.priority;
+                }
+
+                if (payload.from_dirno !== undefined) payload.from_dirno = String(payload.from_dirno);
+                if (payload.to_dirno !== undefined) payload.to_dirno = String(payload.to_dirno);
+                
+
+                let pr = payload.priority;
+                if (pr === undefined || pr === "") {
+                    pr = "40";
+                } else {
+                    pr = String(pr);
+                }
+                payload.priority = pr;
+
+            const missing = findMissingAliases(payload, [["from_dirno"], ["to_dirno"]]);
+            if (missing.length) {
+                reportMissing(node, msg, send, done, missing);
+                return;
+            }
+
+            if (payload.action === undefined || payload.action === "") {
+                payload.action = "answer";
+            }
+            if (payload.verbose === undefined) {
+                payload.verbose = false;
+            }
+
+            const callMessage = wrapWampCallPayload(payload);
+            const result = node.wampClient.callProcedure(node.procedure, callMessage);
+            handleWampCallResult(result, node, msg, send, done);
+        });
+    } else {
+        RED.log.error("wamp client config is missing!");
+    }
+
+    this.on("close", function (done) {
+        if (this.clientNode) {
+            this.clientNode.close(done);
+        } else {
+            done();
+        }
+    });
+}
+RED.nodes.registerType("Zenitel Call Answer", ZenitelCallAnswer);
 
 
     //-------------------------------------------------------------------------------------------------------------------

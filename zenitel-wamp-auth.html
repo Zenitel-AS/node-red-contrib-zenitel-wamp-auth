@@ -1,3 +1,10 @@
+<!--
+Copyright 2026 Zenitel Noreway AS
+
+Licensed under the Apache License, Version 2.0
+http://www.apache.org/licenses/LICENSE-2.0
+-->
+
 <!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
 <!--	|Event|1| Node for directly reading General Purpose Inputs on a Zenitel intercom device	-->
 <!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
@@ -1837,6 +1844,155 @@
         },
         labelStyle: function() { // sets the class to apply to the label
             return this.name?"node_label_italic":"";
+        }
+    }));
+</script>
+
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<!--	|Action|13| Node for directly answering calls on a Zenitel device	-->
+<!-------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<script type="text/x-red" data-template-name="Zenitel Call Answer">
+    <div class="form-row node-input-router">
+        <label for="node-input-router" style="width: 120px;"><i class="fa fa-exchange"></i> <span data-i18n="wamp.label.router"> ZCP Link: </span></label>
+        <input type="text" id="node-input-router">
+    </div>
+    <div class="form-row">
+        <label for="node-input-fromdirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.fromdirno"> From Dirno: </span></label>
+        <input type="text" id="node-input-fromdirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-todirno" style="width: 120px;"><i class="fa fa-address-card-o"></i> <span data-i18n="wamp.label.todirno"> To Dirno: </span></label>
+        <input type="text" id="node-input-todirno" data-i18n="[placeholder]Dirno">
+    </div>
+	<div class="form-row">
+        <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="Zenitel Call Answer">
+   <p>Connects to <a href="https://wiki.zenitel.com/wiki/Zenitel_Link_(Zenitel_Connect_Pro)">Zenitel Connect Pro</a> through WAMP and can execute a to trigger a call setup.</p>
+   <p>The field in the properties window can be used to define the values. If a field is left blank, an incoming <code>msg.payload</code> is expected to contain the information.</p>
+   <p>The properties are as follows:
+   <ul>
+   <li><code>From Dirno:</code> is a string to define the originating directory number.</li>
+   <li><code>To Dirno:</code> is a string to define the receiving directory number.</li>
+   <li><code>Priority: </code> is an integer to define the call setup priority.</li>
+   </ul>
+   </p>
+   <p>If the node is used with the <code>msg.payload</code> it must be a JSON object with the following items to complete the properties in the properties window:
+   <ul>
+   <li><code>from_dirno</code> is a string to define the originating directory number. This must be present if the From Dirno: field is left empty.</li>
+   <li><code>to_dirno</code> is a string to define the receiving directory number. This must be present if the To Dirno: field is left empty.</li>
+   <li><code>priority</code> is an integer to define the call setup priority. This can be present but if missing in the JSON object and the properties window it will default to 40.</li>
+   </ul>
+   </p>
+   <p>To read more, go to the Swagger page of your Zenitel Connect Pro found at the <code>&lt;IP_of_Zenitel_Connect_Pro&gt;/openapi</code></p>
+</script>
+
+<script type="text/javascript">
+    function zenitelCallPriorityIsValid(value) {
+        var str = (value === undefined || value === null) ? "" : ("" + value).trim();
+        if (str === "") {
+            return true;
+        }
+        if (!/^\d+$/.test(str)) {
+            return false;
+        }
+        var num = parseInt(str, 10);
+        return num >= 1 && num <= 250;
+    }
+
+    function zenitelCallSetupAttachPriorityWarning(node) {
+        zenitelCallSetupDetachPriorityWarning(node);
+
+        var $priority = $("#node-input-priority");
+        if (!$priority.length) {
+            return;
+        }
+
+        function closeWarning() {
+            if (node.__priorityWarning) {
+                node.__priorityWarning.close();
+                node.__priorityWarning = null;
+            }
+        }
+
+        function ensureWarning() {
+            if (!node.__priorityWarning) {
+                node.__priorityWarning = RED.notify("Priority must be a number between 1 and 250.", {
+                    type: "warning",
+                    timeout: 0
+                });
+            }
+        }
+
+        function handlePriorityInput() {
+            if (zenitelCallPriorityIsValid($priority.val())) {
+                closeWarning();
+            } else {
+                ensureWarning();
+            }
+        }
+
+        node.__priorityWarningCleanup = function () {
+            $priority.off(".zenitelPriority");
+            closeWarning();
+        };
+
+        $priority.on("input.zenitelPriority change.zenitelPriority", handlePriorityInput);
+        handlePriorityInput();
+    }
+
+    function zenitelCallSetupDetachPriorityWarning(node) {
+        if (node && typeof node.__priorityWarningCleanup === "function") {
+            node.__priorityWarningCleanup();
+            node.__priorityWarningCleanup = null;
+        }
+        if (node && node.__priorityWarning) {
+            node.__priorityWarning.close();
+            node.__priorityWarning = null;
+        }
+    }
+
+    RED.nodes.registerType('Zenitel Call Answer', zenitelApplyDirnoEditHandlers({
+        category: 'Zenitel Actions',      // the palette category
+        defaults: {             // defines the editable properties of the node
+            router: {type: "wamp-client", required: true},
+            fromdirno: {value:"", validate: zenitelDirnoIsValid},
+			todirno: {value:"", validate: zenitelDirnoIsValid},
+			priority: {
+                value:"",
+                validate: function(v) {
+                    return zenitelCallPriorityIsValid(v);
+                }
+            },
+			name: {value:""}
+        },
+        color:"#ffd400",
+        inputs:1,
+        outputs:1,
+        icon: "ZenLogo.png",
+        align: "right",
+        label: function() {
+            var wampNode = RED.nodes.node(this.router);
+            return this.name || this._("Zenitel Call Answer");
+        },
+        labelStyle: function() { // sets the class to apply to the label
+            return this.name?"node_label_italic":"";
+        },
+        oneditprepare: function () {
+            zenitelCallSetupAttachPriorityWarning(this);
+        },
+        oneditsave: function () {
+            zenitelCallSetupDetachPriorityWarning(this);
+        },
+        oneditcancel: function () {
+            zenitelCallSetupDetachPriorityWarning(this);
+        },
+        oneditdelete: function () {
+            zenitelCallSetupDetachPriorityWarning(this);
         }
     }));
 </script>
