@@ -104,12 +104,7 @@ Most event nodes keep their node status indicator green while the pooled connect
 
 `wamp subs` (`WampClientSubscribe`) is a utility node that subscribes to a topic provided at runtime in `msg.topic`. It is useful for dashboard-driven subscriptions or for temporarily tapping into seldom-used topics without wiring dedicated nodes.
 
-## Example Flows
 
-```text
-[Inject] --(msg.payload = {from_dirno:"1001", to_dirno:"1002"})--> [Zenitel Call Setup] --calls--> [Debug]
-[Zenitel Call State] --filters to_dirno=1002--> [Function] (update UI)
-[Inject msg.payload={dirno:"1002", id:"gpo1", operation:"set_timed", time:5}] --> [Zenitel GPO Trigger]
 ```
 
 ## Troubleshooting Tips
