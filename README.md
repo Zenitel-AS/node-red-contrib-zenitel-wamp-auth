@@ -118,3 +118,8 @@ Most event nodes keep their node status indicator green while the pooled connect
 - When a field is missing, the node adds a human-readable string to `msg.error`. Consider wiring Debug nodes to both the `msg.payload` and `msg.error` paths.
 - Because TLS validation is disabled, always restrict Node-RED access; otherwise credentials could be intercepted by a man-in-the-middle.
 - Reuse `Zenitel WAMP Out` / `Zenitel WAMP Request` before adding new specialised nodes - the helper functions already perform aliasing and validation, so you get consistent behaviour.
+
+## License
+
+This project is licensed under the Apache License 2.0.
+See the LICENSE file for details.
