@@ -1,0 +1,645 @@
+[
+    {
+        "id": "209fcf1c65f152db",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "6cbce3dfb6be9254",
+        "type": "group",
+        "z": "209fcf1c65f152db",
+        "name": "Set up a call between two devices",
+        "style": {
+            "label": true,
+            "stroke": "#000000",
+            "color": "#000000"
+        },
+        "nodes": [
+            "fb24bf7a88bf11c8",
+            "a3a0e12607a172b6"
+        ],
+        "x": 84,
+        "y": 199,
+        "w": 422,
+        "h": 82
+    },
+    {
+        "id": "bdf7e849de2ad2fd",
+        "type": "group",
+        "z": "209fcf1c65f152db",
+        "name": "Listen for call events",
+        "style": {
+            "stroke": "#000000",
+            "label": true,
+            "color": "#000000"
+        },
+        "nodes": [
+            "d0bdc598ce79d2d0",
+            "df8bde2095bb765a"
+        ],
+        "x": 74,
+        "y": 319,
+        "w": 452,
+        "h": 82
+    },
+    {
+        "id": "79ea575af0259e6f",
+        "type": "group",
+        "z": "209fcf1c65f152db",
+        "name": "Play audio messsage on device or to broadcast group",
+        "style": {
+            "stroke": "#000000",
+            "label": true,
+            "color": "#000000"
+        },
+        "nodes": [
+            "1fac0c07fb9a2162",
+            "bf9032cae3c39683"
+        ],
+        "x": 1144,
+        "y": 179,
+        "w": 542,
+        "h": 82
+    },
+    {
+        "id": "df7b9cea0517070a",
+        "type": "group",
+        "z": "209fcf1c65f152db",
+        "name": "Request list of all registered devices",
+        "style": {
+            "stroke": "#000000",
+            "label": true,
+            "color": "#000000"
+        },
+        "nodes": [
+            "bb68e2c636d2e7c4",
+            "d5905a02d73ee91b",
+            "ae64e70a35753298"
+        ],
+        "x": 1134,
+        "y": 299,
+        "w": 692,
+        "h": 82
+    },
+    {
+        "id": "68d4e9307f9f6fed",
+        "type": "group",
+        "z": "209fcf1c65f152db",
+        "name": "Request list of call forwarding rules",
+        "style": {
+            "stroke": "#000000",
+            "label": true,
+            "color": "#000000"
+        },
+        "nodes": [
+            "8420f2cbad613740",
+            "a7280b0180837277",
+            "b39e566109216c0b"
+        ],
+        "x": 1134,
+        "y": 439,
+        "w": 672,
+        "h": 82
+    },
+    {
+        "id": "356df69948dfd0de",
+        "type": "group",
+        "z": "209fcf1c65f152db",
+        "name": "Listen for door open/unlock events",
+        "style": {
+            "label": true,
+            "stroke": "#000000",
+            "color": "#000000"
+        },
+        "nodes": [
+            "07d9c147cfa3966c",
+            "c2e215713dd20cb1"
+        ],
+        "x": 74,
+        "y": 439,
+        "w": 512,
+        "h": 82
+    },
+    {
+        "id": "5d7d1999a2977065",
+        "type": "group",
+        "z": "209fcf1c65f152db",
+        "name": "Send event via API when device goes offline",
+        "style": {
+            "stroke": "#000000",
+            "label": true,
+            "color": "#000000"
+        },
+        "nodes": [
+            "de2d4ca10cb05b7b",
+            "5b45160b8f9a9107"
+        ],
+        "x": 74,
+        "y": 579,
+        "w": 552,
+        "h": 82
+    },
+    {
+        "id": "cf655704a37ab820",
+        "type": "group",
+        "z": "209fcf1c65f152db",
+        "name": "Play annoucement every day at 19:00",
+        "style": {
+            "stroke": "#000000",
+            "label": true,
+            "color": "#000000"
+        },
+        "nodes": [
+            "8933db6c3d8151f3",
+            "216b8bb6cc36eda9"
+        ],
+        "x": 1134,
+        "y": 579,
+        "w": 532,
+        "h": 82
+    },
+    {
+        "id": "d8a5cf94dab7df71",
+        "type": "group",
+        "z": "209fcf1c65f152db",
+        "name": "Send event via TCP when call happens",
+        "style": {
+            "label": true,
+            "stroke": "#000000",
+            "color": "#000000"
+        },
+        "nodes": [
+            "13310143679c4687",
+            "203f378c1aa370d7"
+        ],
+        "x": 74,
+        "y": 719,
+        "w": 472,
+        "h": 82
+    },
+    {
+        "id": "3780c0565c2c40fa",
+        "type": "group",
+        "z": "209fcf1c65f152db",
+        "name": "Perform tone test every day at 08:00",
+        "style": {
+            "stroke": "#000000",
+            "label": true,
+            "color": "#000000"
+        },
+        "nodes": [
+            "a0616b97dc62800c",
+            "4b418221fcfa3344"
+        ],
+        "x": 1134,
+        "y": 719,
+        "w": 472,
+        "h": 82
+    },
+    {
+        "id": "fb24bf7a88bf11c8",
+        "type": "Zenitel Call Setup",
+        "z": "209fcf1c65f152db",
+        "g": "6cbce3dfb6be9254",
+        "fromdirno": "",
+        "todirno": "",
+        "priority": "",
+        "name": "",
+        "x": 390,
+        "y": 240,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "a3a0e12607a172b6",
+        "type": "inject",
+        "z": "209fcf1c65f152db",
+        "g": "6cbce3dfb6be9254",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 190,
+        "y": 240,
+        "wires": [
+            [
+                "fb24bf7a88bf11c8"
+            ]
+        ]
+    },
+    {
+        "id": "d0bdc598ce79d2d0",
+        "type": "Zenitel Call State",
+        "z": "209fcf1c65f152db",
+        "g": "bdf7e849de2ad2fd",
+        "fromdirno": "",
+        "todirno": "",
+        "calltype": "",
+        "callstate": "",
+        "reason": "",
+        "name": "",
+        "x": 200,
+        "y": 360,
+        "wires": [
+            [
+                "df8bde2095bb765a"
+            ]
+        ]
+    },
+    {
+        "id": "df8bde2095bb765a",
+        "type": "debug",
+        "z": "209fcf1c65f152db",
+        "g": "bdf7e849de2ad2fd",
+        "name": "debug 4",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 420,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "1fac0c07fb9a2162",
+        "type": "Zenitel Play Audio Message",
+        "z": "209fcf1c65f152db",
+        "g": "79ea575af0259e6f",
+        "audiomsgdirno": "",
+        "todirno": "",
+        "name": "",
+        "x": 1540,
+        "y": 220,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "bf9032cae3c39683",
+        "type": "inject",
+        "z": "209fcf1c65f152db",
+        "g": "79ea575af0259e6f",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 1250,
+        "y": 220,
+        "wires": [
+            [
+                "1fac0c07fb9a2162"
+            ]
+        ]
+    },
+    {
+        "id": "bb68e2c636d2e7c4",
+        "type": "Zenitel Device Account Request",
+        "z": "209fcf1c65f152db",
+        "g": "df7b9cea0517070a",
+        "state": "",
+        "name": "",
+        "x": 1490,
+        "y": 340,
+        "wires": [
+            [
+                "ae64e70a35753298"
+            ]
+        ]
+    },
+    {
+        "id": "d5905a02d73ee91b",
+        "type": "inject",
+        "z": "209fcf1c65f152db",
+        "g": "df7b9cea0517070a",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 1240,
+        "y": 340,
+        "wires": [
+            [
+                "bb68e2c636d2e7c4"
+            ]
+        ]
+    },
+    {
+        "id": "ae64e70a35753298",
+        "type": "debug",
+        "z": "209fcf1c65f152db",
+        "g": "df7b9cea0517070a",
+        "name": "debug 5",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1720,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "8420f2cbad613740",
+        "type": "Zenitel Call Forwarding Request",
+        "z": "209fcf1c65f152db",
+        "g": "68d4e9307f9f6fed",
+        "dirno": "",
+        "fwd_type": "",
+        "name": "",
+        "x": 1470,
+        "y": 480,
+        "wires": [
+            [
+                "b39e566109216c0b"
+            ]
+        ]
+    },
+    {
+        "id": "a7280b0180837277",
+        "type": "inject",
+        "z": "209fcf1c65f152db",
+        "g": "68d4e9307f9f6fed",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 1240,
+        "y": 480,
+        "wires": [
+            [
+                "8420f2cbad613740"
+            ]
+        ]
+    },
+    {
+        "id": "b39e566109216c0b",
+        "type": "debug",
+        "z": "209fcf1c65f152db",
+        "g": "68d4e9307f9f6fed",
+        "name": "debug 6",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1700,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "07d9c147cfa3966c",
+        "type": "Zenitel Door Open",
+        "z": "209fcf1c65f152db",
+        "g": "356df69948dfd0de",
+        "door_dirno": "",
+        "from_dirno": "",
+        "name": "",
+        "x": 220,
+        "y": 480,
+        "wires": [
+            [
+                "c2e215713dd20cb1"
+            ]
+        ]
+    },
+    {
+        "id": "c2e215713dd20cb1",
+        "type": "debug",
+        "z": "209fcf1c65f152db",
+        "g": "356df69948dfd0de",
+        "name": "debug 7",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 480,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "de2d4ca10cb05b7b",
+        "type": "http request",
+        "z": "209fcf1c65f152db",
+        "g": "5d7d1999a2977065",
+        "name": "",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": false,
+        "url": "",
+        "persist": false,
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 530,
+        "y": 620,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "5b45160b8f9a9107",
+        "type": "Zenitel Device State",
+        "z": "209fcf1c65f152db",
+        "g": "5d7d1999a2977065",
+        "router": "",
+        "dirno": "",
+        "state": "unreachable",
+        "name": "",
+        "x": 210,
+        "y": 620,
+        "wires": [
+            [
+                "de2d4ca10cb05b7b"
+            ]
+        ]
+    },
+    {
+        "id": "8933db6c3d8151f3",
+        "type": "Zenitel Play Audio Message",
+        "z": "209fcf1c65f152db",
+        "g": "cf655704a37ab820",
+        "audiomsgdirno": "",
+        "todirno": "",
+        "name": "",
+        "x": 1520,
+        "y": 620,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "216b8bb6cc36eda9",
+        "type": "inject",
+        "z": "209fcf1c65f152db",
+        "g": "cf655704a37ab820",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "00 19 * * 1,2,3,4,5,6",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 1250,
+        "y": 620,
+        "wires": [
+            [
+                "8933db6c3d8151f3"
+            ]
+        ]
+    },
+    {
+        "id": "13310143679c4687",
+        "type": "tcp out",
+        "z": "209fcf1c65f152db",
+        "g": "d8a5cf94dab7df71",
+        "name": "",
+        "host": "",
+        "port": "",
+        "beserver": "client",
+        "base64": false,
+        "end": false,
+        "tls": "",
+        "x": 470,
+        "y": 760,
+        "wires": []
+    },
+    {
+        "id": "203f378c1aa370d7",
+        "type": "Zenitel Call State",
+        "z": "209fcf1c65f152db",
+        "g": "d8a5cf94dab7df71",
+        "fromdirno": "",
+        "todirno": "",
+        "calltype": "",
+        "callstate": "",
+        "reason": "",
+        "name": "",
+        "x": 200,
+        "y": 760,
+        "wires": [
+            [
+                "13310143679c4687"
+            ]
+        ]
+    },
+    {
+        "id": "a0616b97dc62800c",
+        "type": "Zenitel Tone Test",
+        "z": "209fcf1c65f152db",
+        "g": "3780c0565c2c40fa",
+        "dirno": "",
+        "name": "",
+        "x": 1490,
+        "y": 760,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "4b418221fcfa3344",
+        "type": "inject",
+        "z": "209fcf1c65f152db",
+        "g": "3780c0565c2c40fa",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "00 08 * * *",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 1250,
+        "y": 760,
+        "wires": [
+            [
+                "a0616b97dc62800c"
+            ]
+        ]
+    }
+]
