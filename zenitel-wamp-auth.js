@@ -138,7 +138,7 @@ module.exports = function (RED) {
         // kind: "gpis" or "gpos"
         const address = clientNode.address || "";
         const encrypt = address.includes("wss");
-        const addrParts = address.split(":"); // e.g., ["wss", "//10.0.0.5", "8086"]
+        const addrParts = address.split(":"); 
         const ip = (addrParts[1] || "").replace("//", "");
         const base = encrypt ? "https://" + ip + ":443" : "http://" + ip + ":80";
         const path = "/api/devices/device;dirno=" + encodeURIComponent(dirno) + "/" + kind;
