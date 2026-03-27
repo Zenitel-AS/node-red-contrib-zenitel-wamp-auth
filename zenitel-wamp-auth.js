@@ -1584,6 +1584,7 @@ RED.nodes.registerType("Zenitel Call Setup", ZenitelCallSetup);
         this.router = config.router;
         this.procedure = 'com.zenitel.system.devices.test.tone.post';
 		this.dirno = config.dirno;
+        this.tone_group = config.tone_group;
         this.clientNode = RED.nodes.getNode(this.router)
 
         if (this.clientNode) {
@@ -1603,6 +1604,7 @@ RED.nodes.registerType("Zenitel Call Setup", ZenitelCallSetup);
                 const payload = ensurePayloadObject(msg);
 
                 assignConfigValue(payload, node.dirno, ["dirno"]);
+                assignConfigValue(payload, node.tone_group, ["tone_group"]);
                 syncAliases(payload, ["dirno"]);
 
                 const missing = findMissingAliases(payload, [["dirno"]]);
