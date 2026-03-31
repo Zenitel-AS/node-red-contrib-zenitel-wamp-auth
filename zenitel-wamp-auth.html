@@ -1569,6 +1569,19 @@ http://www.apache.org/licenses/LICENSE-2.0
         <input type="text" id="node-input-dirno" data-i18n="[placeholder]Dirno">
     </div>
     <div class="form-row">
+        <label for="node-input-tone_group" style="width: 120px;"><i class="fa fa-folder"></i> <span data-i18n="wamp.label.tone_group"> Tone group: </span></label>
+        <select type="text" id="node-input-tone_group" style="width:70%;">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+        </select>
+    </div>
+    <div class="form-row">
         <label for="node-input-name" style="width: 120px;"><i class="fa fa-tag"></i> <span data-i18n="node-red:common.label.name"></span></label>
         <input type="text" id="node-input-name" data-i18n="[placeholder]node-red:common.label.name">
     </div>
@@ -1598,6 +1611,7 @@ http://www.apache.org/licenses/LICENSE-2.0
         defaults: {             // defines the editable properties of the node
             router: {type: "wamp-client", required: true},
 			dirno: {value:"", validate: zenitelDirnoIsValid},
+            tone_group: {value:"5"},
             name: {value:""}
         },
         color:"#ffd400",
