@@ -1,0 +1,4 @@
+.github/
+.npm-cache/
+node_modules/
+*.tgz
