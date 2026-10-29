@@ -2788,9 +2788,18 @@ http://www.apache.org/licenses/LICENSE-2.0
    <li><code>Zenitel Connect Pro IP Address:</code> is the IP address of the Zenitel Connect Pro server.</li>
    <li><code>WAMP Port:</code> fixed to <code>8086</code>; no user input is needed.</li>
    <li><code>Zenitel Link Username:</code> is the username for the Zenitel Link.</li>
-   <li><code>Zenitel Link Password:</code> is the password for the Zenitel Link.</li>   
+   <li><code>Zenitel Link Password:</code> is the password for the Zenitel Link.</li>
    </ul>
    </p>
+   <p>The username and password are stored as
+   <a href="https://nodered.org/docs/creating-nodes/credentials" target="_blank">Node-RED credentials</a>.
+   They are kept in the encrypted <code>flows_cred.json</code> file rather than in <code>flows.json</code>,
+   so they are not included when flows are exported from the editor or when the flow file is backed up.
+   Set <code>credentialSecret</code> in <code>settings.js</code> so the credential file cannot be decrypted
+   without it.</p>
+   <p><b>Upgrading from a version before 2.2.0:</b> the username and password used to be saved in the flow
+   file. Open each ZCP Link configuration node, re-enter the username and password and deploy to move
+   them into the credential store.</p>
 </script>
 
 <script type="text/javascript">
@@ -2799,12 +2808,26 @@ http://www.apache.org/licenses/LICENSE-2.0
         defaults: {           // defines the editable properties of the node
             ip:      { value: "", required: true },
             port:    { value: "8086" },
-            authId:  { value: "", required: true },
-            password:{ value: "", required: true },
             name:    { value: "" }
+        },
+        // Stored in flows_cred.json instead of flows.json, and excluded from editor exports.
+        // See https://nodered.org/docs/creating-nodes/credentials
+        credentials: {
+            authId:  { type: "text" },
+            password:{ type: "password" }
         },
         oneditprepare: function() {
             $("#node-config-input-port").val("8086");
+            // The editor only receives the username and a has_password flag; the password
+            // itself never leaves the runtime. Point the user at the fields when either is
+            // missing (new node, or a flow upgraded from before v2.2.0).
+            var creds = this.credentials || {};
+            if (!creds.authId || !creds.has_password) {
+                RED.notify("Enter the Zenitel Link username and password. They are stored as Node-RED credentials and are not included in flow exports.", {
+                    type: "warning",
+                    timeout: 8000
+                });
+            }
         },
         label: function() {   // sets the default label contents
             var port = "8086";

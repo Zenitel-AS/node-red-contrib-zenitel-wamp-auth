@@ -181,9 +181,33 @@ module.exports = function (RED) {
     this.address = "wss://" + ip + ":" + port;
 
     this.realm = "zenitel";
-    this.authId = config.authId;
-    this.password = config.password;
     this.port = port;
+
+    // Username and password are Node-RED credentials, not ordinary config properties.
+    // Credentials live in flows_cred.json (encrypted with credentialSecret) instead of
+    // flows.json, so they are left out of editor exports, Admin API /flows responses and
+    // plain-text backups of the flow file.
+    // See https://nodered.org/docs/creating-nodes/credentials
+    const creds = this.credentials || {};
+    this.authId = creds.authId;
+    this.password = creds.password;
+
+    // Backwards compatibility with flows deployed before v2.2.0, where authId/password
+    // were stored as plain config properties in flows.json. Fall back to those values
+    // until the user re-enters the credentials in the editor, and say so in the log.
+    this.legacyCredentials = false;
+    if ((!this.authId || !this.password) && (config.authId || config.password)) {
+        this.authId = this.authId || config.authId;
+        this.password = this.password || config.password;
+        this.legacyCredentials = true;
+        this.warn("ZCP Link '" + (this.name || ip) + "' is using a username/password stored in the flow file. " +
+                  "Open the ZCP Link configuration node, re-enter the username and password and deploy " +
+                  "to move them into the encrypted credential store.");
+    }
+    if (!this.authId || !this.password) {
+        this.error("ZCP Link '" + (this.name || ip) + "' has no username/password configured. " +
+                   "Open the ZCP Link configuration node and enter the Zenitel Link credentials.");
+    }
 
     this.wampClient = function () {
         return wampClientPool.get(this.address, this.realm, this.authId, this.password);
@@ -198,7 +222,12 @@ module.exports = function (RED) {
     };
 }
 
-RED.nodes.registerType("wamp-client", WampClientNode);
+RED.nodes.registerType("wamp-client", WampClientNode, {
+    credentials: {
+        authId:   { type: "text" },
+        password: { type: "password" }
+    }
+});
 
 
 
@@ -2741,8 +2770,6 @@ function ZenitelGPIRequest(config) {
 		var _token = "";
 		var encoded = btoa(id + ":" + passw);
 		
-//EM		RED.log.info("WampClientPool: authid: " + id + ". password: " + passw + ". url: " + address);
-		
 		var addr = address.replace(" ", "");
 		var encrypt  = addr.includes("wss");
 		const addrPortArray = addr.split(':');
@@ -2993,8 +3020,6 @@ function ZenitelGPIRequest(config) {
                             // keep retryAttempt to grow backoff
                             obj._emitter.emit("closed");
 														
-//EM							RED.log.info("WampClientPool: authid: " + authid + ". password: " + password + ". url: " + address);
-							
 							var encrypt  = address.includes("wss");
 							
 							if (encrypt)

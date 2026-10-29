@@ -1,13 +1,19 @@
 # Zenitel WAMP Node-RED Nodes
 
-Custom Node-RED nodes inside `zenitel-wamp-authLWE.js` expose Zenitel intercom functionality over WAMP. They are grouped into **event** (subscriptions), **action** (commands) and **request** (state/query) nodes, all sharing the same connection and payload conventions.
+Custom Node-RED nodes inside `zenitel-wamp-auth.js` expose Zenitel intercom functionality over WAMP. They are grouped into **event** (subscriptions), **action** (commands) and **request** (state/query) nodes, all sharing the same connection and payload conventions.
 
 ## Connection & Authentication
 
-- Use the `wamp-client` configuration node to define target **IP**, **authId** and **password**. The WAMP port is fixed to `8086` and the node always connects to `wss://<ip>:8086` on realm `zenitel`.
+- Use the `wamp-client` configuration node ("ZCP Link") to define the target **IP**, **username** (`authId`) and **password**. The WAMP port is fixed to `8086` and the node always connects to `wss://<ip>:8086` on realm `zenitel`.
+- The username and password are stored as [Node-RED credentials](https://nodered.org/docs/creating-nodes/credentials), not as ordinary node properties. Node-RED keeps credentials in the encrypted `flows_cred.json` file instead of `flows.json`, so they are **not included when flows are exported from the editor**, are not returned by the Admin API `/flows` endpoint, and are not readable from a plain backup of the flow file.
+- Set `credentialSecret` in your `settings.js`. If it is not set, Node-RED generates a random key and stores it in `.config.runtime.json` in the same user directory, which means a full backup of that directory can still decrypt the credentials.
 - TLS 1.2-1.3 is enforced and `NODE_TLS_REJECT_UNAUTHORIZED` is set to `0`, so self-signed Zenitel certificates are accepted.
 - Ticket authentication is implemented by `GetToken()`, which performs an HTTPS `POST /api/auth/login` call using HTTP Basic credentials and injects the returned `access_token` in the WAMP `onchallenge` handler.
 - Connections are pooled by `wampClientPool`, so multiple nodes reuse the same Autobahn session; closing a configuration node tears down its pooled session.
+
+### Upgrading from a version before 2.2.0
+
+Earlier versions saved the username and password in `flows.json`. After upgrading, open each ZCP Link configuration node, re-enter the username and password and deploy; this moves them into the credential store. Until you do, the node keeps using the values from the flow file and logs a warning on every start. The old values disappear from `flows.json` the first time the flow is deployed from the upgraded editor, so re-enter the credentials before you deploy anything else.
 
 ## Payload & Error Conventions
 
@@ -112,6 +118,7 @@ Most event nodes keep their node status indicator green while the pooled connect
 - Watch the node status dot: green means the pooled Autobahn session is live, red indicates the connection (or authentication) dropped.
 - When a field is missing, the node adds a human-readable string to `msg.error`. Consider wiring Debug nodes to both the `msg.payload` and `msg.error` paths.
 - Because TLS validation is disabled, always restrict Node-RED access; otherwise credentials could be intercepted by a man-in-the-middle.
+- If a ZCP Link stops authenticating after an upgrade, or the log says the node "has no username/password configured", open the ZCP Link configuration node and (re-)enter the credentials; see *Upgrading from a version before 2.2.0* above.
 - Reuse `Zenitel WAMP Out` / `Zenitel WAMP Request` before adding new specialised nodes - the helper functions already perform aliasing and validation, so you get consistent behaviour.
 
 ## License
